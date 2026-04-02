@@ -8,9 +8,9 @@
  * Logging never breaks the request flow — all errors are swallowed.
  */
 
-import { appendFile, mkdir } from "node:fs/promises";
-import { join } from "node:path";
-import { homedir } from "node:os";
+import { appendFile, mkdir } from "bun:fs";
+import { join } from "bun:path";
+import { homedir } from "bun:os";
 
 export type UsageEntry = {
   timestamp: string;

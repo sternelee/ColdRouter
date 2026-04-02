@@ -27,9 +27,9 @@ import {
 } from "./api-keys";
 import type { RoutingConfig } from "./router/index";
 import { OPENCLAW_MODELS } from "./models";
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from "bun:fs";
+import { homedir } from "bun:os";
+import { join } from "bun:path";
 import { VERSION } from "./version";
 import { getStats, formatStatsAscii } from "./stats";
 import { refreshOpenRouterModels } from "./openrouter-models";

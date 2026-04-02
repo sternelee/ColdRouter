@@ -5,7 +5,7 @@
  * Tracks in-flight requests and caches completed responses for a short TTL.
  */
 
-import { createHash } from "node:crypto";
+import { createHash } from "bun:crypto";
 
 export type CachedResponse = {
   status: number;

@@ -5,9 +5,9 @@
  * Supports filtering by date range and provides multiple aggregation views.
  */
 
-import { readFile, readdir } from "node:fs/promises";
-import { join } from "node:path";
-import { homedir } from "node:os";
+import { readFile, readdir } from "bun:fs";
+import { join } from "bun:path";
+import { homedir } from "bun:os";
 import type { UsageEntry } from "./logger";
 
 const LOG_DIR = join(homedir(), ".openclaw", "clawrouter", "logs");

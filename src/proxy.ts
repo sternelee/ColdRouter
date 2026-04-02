@@ -11,7 +11,7 @@
  *           → streams response back
  */
 
-import type { AddressInfo } from "node:net";
+
 import {
   loadApiKeys,
   getConfiguredProviders,
@@ -1055,8 +1055,9 @@ export async function startProxy(options: ProxyOptions): Promise<ProxyHandle> {
     hostname: "127.0.0.1",
     async fetch(req: Request) {
       try {
-        const url = req.url || "";
-        const pathname = url.includes("?") ? url.split("?")[0] : url;
+        const host = req.headers.get("host") || "localhost:8403";
+        const url = new URL(req.url, `http://${host}`);
+        const pathname = url.pathname;
 
         if (pathname === "/health" || pathname.startsWith("/health")) {
           const accessibleProviders = getAccessibleProviders(options.apiKeys);

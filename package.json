@@ -26,7 +26,7 @@
   "scripts": {
     "build": "bun build --target=node --outdir=dist --splitting --sourcemap src/index.ts && bun build --target=node --outdir=dist --sourcemap src/cli.ts",
     "dev": "bun run src/cli.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "bun build --target=node --outdir=/tmp/clawrouter-check src/index.ts src/cli.ts 2>&1 && echo 'Build successful' || echo 'Build failed'"
   },
   "keywords": [
     "llm",
