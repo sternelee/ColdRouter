@@ -39,6 +39,42 @@ export function loadModelRegistry(): ModelRegistryConfig | null {
       return null;
     }
 
+    // Validate each model definition
+    const errors: string[] = [];
+    for (const [modelId, model] of Object.entries(config.models)) {
+      if (!model.provider) {
+        errors.push(`model "${modelId}": missing provider`);
+      }
+      if (!model.tiers || model.tiers.length === 0) {
+        errors.push(`model "${modelId}": missing tiers`);
+      }
+      if (!model.pricing) {
+        errors.push(`model "${modelId}": missing pricing`);
+      } else {
+        if (typeof model.pricing.input !== "number" || model.pricing.input < 0) {
+          errors.push(`model "${modelId}": invalid pricing.input`);
+        }
+        if (typeof model.pricing.output !== "number" || model.pricing.output < 0) {
+          errors.push(`model "${modelId}": invalid pricing.output`);
+        }
+      }
+      if (!model.limits) {
+        errors.push(`model "${modelId}": missing limits`);
+      } else {
+        if (typeof model.limits.contextWindow !== "number" || model.limits.contextWindow <= 0) {
+          errors.push(`model "${modelId}": invalid limits.contextWindow`);
+        }
+        if (typeof model.limits.maxOutput !== "number" || model.limits.maxOutput <= 0) {
+          errors.push(`model "${modelId}": invalid limits.maxOutput`);
+        }
+      }
+    }
+
+    if (errors.length > 0) {
+      console.warn(`[model-registry] Invalid config: ${errors.join(", ")}`);
+      return null;
+    }
+
     return config;
   } catch (err) {
     if (err instanceof Error && "code" in err && err.code !== "ENOENT") {

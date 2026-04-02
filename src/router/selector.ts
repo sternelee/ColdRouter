@@ -26,6 +26,7 @@ export function selectModel(
   estimatedInputTokens: number,
   maxOutputTokens: number,
   allowedModels?: string[],
+  isAgentic?: boolean,
 ): RoutingDecision {
   const tierConfig = tierConfigs[tier];
 
@@ -68,6 +69,7 @@ export function selectModel(
     costEstimate,
     baselineCost,
     savings,
+    isAgentic,
   };
 }
 

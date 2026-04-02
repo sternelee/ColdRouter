@@ -41,6 +41,7 @@ import { RequestDeduplicator } from "./dedup";
 import { USER_AGENT } from "./version";
 import { SessionStore, getSessionId, type SessionConfig } from "./session";
 import { resolveOpenRouterModelId, ensureOpenRouterCache } from "./openrouter-models";
+import { getCustomModels } from "./model-registry";
 
 const AUTO_MODEL = "clawrouter/auto";
 const AUTO_MODEL_SHORT = "auto";
@@ -52,6 +53,13 @@ const HEALTH_CHECK_TIMEOUT_MS = 2_000;
 const RATE_LIMIT_COOLDOWN_MS = 60_000;
 const PORT_RETRY_ATTEMPTS = 5;
 const PORT_RETRY_DELAY_MS = 1_000;
+
+// Global logger instance (set by startProxy)
+let proxyLogger: ProxyOptions["logger"] = {
+  info: (msg) => console.log(`[ClawRouter] ${msg}`),
+  warn: (msg) => console.warn(`[ClawRouter] ${msg}`),
+  error: (msg) => console.error(`[ClawRouter] ${msg}`),
+};
 
 const rateLimitedModels = new Map<string, number>();
 
@@ -67,7 +75,7 @@ function isRateLimited(modelId: string): boolean {
 
 function markRateLimited(modelId: string): void {
   rateLimitedModels.set(modelId, Date.now());
-  console.log(`[ClawRouter] Model ${modelId} rate-limited, will deprioritize for 60s`);
+  proxyLogger.warn?.(`Model ${modelId} rate-limited, will deprioritize for 60s`);
 }
 
 function prioritizeNonRateLimited(models: string[]): string[] {
@@ -374,6 +382,12 @@ export type ProxyOptions = {
   onReady?: (port: number) => void;
   onError?: (error: Error) => void;
   onRouted?: (decision: RoutingDecision) => void;
+  /** Optional logger for structured logging */
+  logger?: {
+    info?: (msg: string) => void;
+    warn?: (msg: string) => void;
+    error?: (msg: string) => void;
+  };
 };
 
 export type ProxyHandle = {
@@ -385,10 +399,18 @@ export type ProxyHandle = {
 
 function buildModelPricing(): Map<string, ModelPricing> {
   const map = new Map<string, ModelPricing>();
+
+  // Built-in models
   for (const m of BLOCKRUN_MODELS) {
     if (m.id === "auto") continue;
     map.set(m.id, { inputPrice: m.inputPrice, outputPrice: m.outputPrice });
   }
+
+  // Custom models from registry
+  for (const m of getCustomModels()) {
+    map.set(m.id, { inputPrice: m.pricing.input, outputPrice: m.pricing.output });
+  }
+
   return map;
 }
 
@@ -529,38 +551,50 @@ async function tryModelRequest(
   }
 
   let requestBody = body;
+  let parsedBody: Record<string, unknown> | null = null;
+
   try {
-    const parsed = JSON.parse(body.toString()) as Record<string, unknown>;
-    parsed.model = upstream.actualModelId;
+    parsedBody = JSON.parse(body.toString()) as Record<string, unknown>;
+  } catch (err) {
+    // Invalid JSON body - return error early, don't send malformed request
+    return {
+      success: false,
+      errorBody: `Invalid JSON in request body: ${err instanceof Error ? err.message : "parse error"}`,
+      errorStatus: 400,
+      isProviderError: false,
+    };
+  }
 
-    if (Array.isArray(parsed.messages)) {
-      parsed.messages = normalizeMessageRoles(parsed.messages as ChatMessage[]);
-      parsed.messages = sanitizeToolIds(parsed.messages as ChatMessage[]);
+  // Successfully parsed - transform the request
+  if (parsedBody) {
+    parsedBody.model = upstream.actualModelId;
+
+    if (Array.isArray(parsedBody.messages)) {
+      parsedBody.messages = normalizeMessageRoles(parsedBody.messages as ChatMessage[]);
+      parsedBody.messages = sanitizeToolIds(parsedBody.messages as ChatMessage[]);
     }
 
-    if (isGoogleModel(modelId) && Array.isArray(parsed.messages)) {
-      parsed.messages = normalizeMessagesForGoogle(parsed.messages as ChatMessage[]);
+    if (isGoogleModel(modelId) && Array.isArray(parsedBody.messages)) {
+      parsedBody.messages = normalizeMessagesForGoogle(parsedBody.messages as ChatMessage[]);
     }
 
-    if (parsed.thinking && Array.isArray(parsed.messages)) {
-      parsed.messages = normalizeMessagesForThinking(parsed.messages as ExtendedChatMessage[]);
+    if (parsedBody.thinking && Array.isArray(parsedBody.messages)) {
+      parsedBody.messages = normalizeMessagesForThinking(parsedBody.messages as ExtendedChatMessage[]);
     }
 
     if (upstream.provider === "anthropic" && !upstream.viaOpenRouter) {
-      const anthropicBody = convertToAnthropicFormat(parsed);
+      const anthropicBody = convertToAnthropicFormat(parsedBody);
       requestBody = Buffer.from(JSON.stringify(anthropicBody));
     } else {
-      requestBody = Buffer.from(JSON.stringify(parsed));
+      requestBody = Buffer.from(JSON.stringify(parsedBody));
     }
-  } catch {
-    // If body isn't valid JSON, use as-is
   }
 
   const headers = buildProviderHeaders(upstream.provider, upstream.apiKey, upstream.viaOpenRouter);
 
   try {
-    console.log(
-      `[ClawRouter] → ${upstream.provider} ${upstream.url} model=${upstream.actualModelId} viaOR=${upstream.viaOpenRouter}`,
+    proxyLogger.info?.(
+      `→ ${upstream.provider} ${upstream.url} model=${upstream.actualModelId} viaOR=${upstream.viaOpenRouter}`,
     );
     const response = await fetch(upstream.url, {
       method,
@@ -571,7 +605,7 @@ async function tryModelRequest(
 
     if (response.status !== 200) {
       const errorBody = await response.text();
-      console.log(`[ClawRouter] ← ${response.status} ${errorBody.slice(0, 200)}`);
+      proxyLogger.info?.(`← ${response.status} ${errorBody.slice(0, 200)}`);
       return {
         success: false,
         errorBody,
@@ -626,8 +660,8 @@ async function handleChatCompletion(
       normalizedModel === "blockrun/auto" ||
       normalizedModel === "clawrouter/auto";
 
-    console.log(
-      `[ClawRouter] Received model: "${parsed.model}" -> normalized: "${normalizedModel}"${wasAlias ? ` -> alias: "${resolvedModel}"` : ""}, isAuto: ${isAutoModel}`,
+    proxyLogger.info?.(
+      `Received model: "${parsed.model}" -> normalized: "${normalizedModel}"${wasAlias ? ` -> alias: "${resolvedModel}"` : ""}, isAuto: ${isAutoModel}`,
     );
 
     if (wasAlias && !isAutoModel) {
@@ -641,8 +675,8 @@ async function handleChatCompletion(
       const existingSession = sessionId ? sessionStore.getSession(sessionId) : undefined;
 
       if (existingSession) {
-        console.log(
-          `[ClawRouter] Session ${sessionId?.slice(0, 8)}... using pinned model: ${existingSession.model}`,
+        proxyLogger.info?.(
+          `Session ${sessionId?.slice(0, 8)}... using pinned model: ${existingSession.model}`,
         );
         parsed.model = existingSession.model;
         modelId = existingSession.model;
@@ -707,7 +741,7 @@ async function handleChatCompletion(
     modifiedBody = Buffer.from(JSON.stringify(parsed));
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
-    console.error(`[ClawRouter] Routing error: ${errorMsg}`);
+    proxyLogger.error?.(`Routing error: ${errorMsg}`);
     options.onError?.(new Error(`Routing failed: ${errorMsg}`));
   }
 
@@ -739,7 +773,8 @@ async function handleChatCompletion(
       const estimatedInputTokens = Math.ceil(modifiedBody.length / 4);
       const estimatedTotalTokens = estimatedInputTokens + maxTokens;
       const useAgenticTiers =
-        routingDecision.reasoning?.includes("agentic") && routerOpts.config.agenticTiers;
+        (routingDecision.isAgentic || routingDecision.reasoning?.includes("agentic")) &&
+        routerOpts.config.agenticTiers;
       const tierConfigs = useAgenticTiers
         ? routerOpts.config.agenticTiers!
         : routerOpts.config.tiers;
@@ -763,7 +798,7 @@ async function handleChatCompletion(
     for (let i = 0; i < modelsToTry.length; i++) {
       const tryModel = modelsToTry[i];
       const isLastAttempt = i === modelsToTry.length - 1;
-      console.log(`[ClawRouter] Trying model ${i + 1}/${modelsToTry.length}: ${tryModel}`);
+      proxyLogger.info?.(`Trying model ${i + 1}/${modelsToTry.length}: ${tryModel}`);
 
       const result = await tryModelRequest(
         tryModel,
@@ -778,15 +813,15 @@ async function handleChatCompletion(
       if (result.success && result.response) {
         upstream = result.response;
         actualModelUsed = tryModel;
-        console.log(`[ClawRouter] Success with model: ${tryModel}`);
+        proxyLogger.info?.(`Success with model: ${tryModel}`);
         break;
       }
 
       lastError = { body: result.errorBody || "Unknown error", status: result.errorStatus || 500 };
       if (result.isProviderError && !isLastAttempt) {
         if (result.errorStatus === 429) markRateLimited(tryModel);
-        console.log(
-          `[ClawRouter] Provider error from ${tryModel}, trying fallback: ${result.errorBody?.slice(0, 100)}`,
+        proxyLogger.info?.(
+          `Provider error from ${tryModel}, trying fallback: ${result.errorBody?.slice(0, 100)}`,
         );
         continue;
       }
@@ -956,8 +991,8 @@ async function handleChatCompletion(
           await writer.write(encoder.encode("data: [DONE]\n\n"));
           responseChunks.push(Buffer.from("data: [DONE]\n\n"));
         } catch (err) {
-          console.error(
-            `[ClawRouter] Stream error: ${err instanceof Error ? err.message : String(err)}`,
+          proxyLogger.error?.(
+            `Stream error: ${err instanceof Error ? err.message : String(err)}`,
           );
         } finally {
           clearInterval(heartbeatInterval);
@@ -1030,6 +1065,11 @@ async function handleChatCompletion(
 }
 
 export async function startProxy(options: ProxyOptions): Promise<ProxyHandle> {
+  // Initialize logger from options
+  if (options.logger) {
+    proxyLogger = options.logger;
+  }
+
   const listenPort = options.port ?? getProxyPort();
   const configuredProviders = getConfiguredProviders(options.apiKeys);
 
@@ -1134,7 +1174,7 @@ export async function startProxy(options: ProxyOptions): Promise<ProxyHandle> {
       }
     },
     error(err) {
-      console.error(`[ClawRouter] Server runtime error: ${err.message}`);
+      proxyLogger.error?.(`Server runtime error: ${err.message}`);
       options.onError?.(err);
       return new Response("Internal Server Error", { status: 500 });
     },

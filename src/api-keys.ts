@@ -186,11 +186,14 @@ export function isModelAccessible(config: ApiKeysConfig, modelId: string): boole
 /**
  * Get all providers that have models accessible (direct + OpenRouter-backed).
  * Used for filtering the model list.
+ *
+ * Note: When OpenRouter is configured, all providers are considered accessible
+ * because OpenRouter acts as a unified gateway to all provider APIs.
  */
 export function getAccessibleProviders(config: ApiKeysConfig): string[] {
   const direct = getConfiguredProviders(config).filter((p) => p !== "openrouter");
   if (hasOpenRouter(config)) {
-    // OpenRouter covers all known providers
+    // OpenRouter provides unified access to all providers
     return Object.keys(PROVIDER_ENDPOINTS).filter((p) => p !== "openrouter");
   }
   return direct;

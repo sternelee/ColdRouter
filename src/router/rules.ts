@@ -1,7 +1,7 @@
 /**
  * Rule-Based Classifier (v2 — Weighted Scoring)
  *
- * Scores a request across 14 weighted dimensions and maps the aggregate
+ * Scores a request across 15 weighted dimensions and maps the aggregate
  * score to a tier using configurable boundaries. Confidence is calibrated
  * via sigmoid — low confidence triggers the fallback classifier.
  *

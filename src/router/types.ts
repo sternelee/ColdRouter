@@ -27,6 +27,8 @@ export type RoutingDecision = {
   costEstimate: number;
   baselineCost: number;
   savings: number; // 0-1 percentage
+  /** Whether this request was detected as an agentic task */
+  isAgentic?: boolean;
 };
 
 export type TierConfig = {

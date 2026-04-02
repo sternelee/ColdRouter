@@ -68,6 +68,7 @@ export function route(
       estimatedTokens,
       maxOutputTokens,
       allowedModels,
+      useAgenticTiers,
     );
   }
 
@@ -120,6 +121,7 @@ export function route(
     estimatedTokens,
     maxOutputTokens,
     allowedModels,
+    useAgenticTiers,
   );
 }
 
