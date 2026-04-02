@@ -11,7 +11,7 @@
  *   3. No match — pass through original ID (OpenRouter will error, triggering fallback)
  */
 
-import { BLOCKRUN_MODELS } from "./models.js";
+import { BLOCKRUN_MODELS } from "./models";
 
 type OpenRouterModel = { id: string; name?: string };
 

@@ -8,7 +8,7 @@
  * they set their own markup when reselling to end users (Phase 2).
  */
 
-import type { ModelDefinitionConfig, ModelProviderConfig } from "./types.js";
+import type { ModelDefinitionConfig, ModelProviderConfig } from "./types";
 
 /**
  * Model aliases for convenient shorthand access.

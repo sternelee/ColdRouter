@@ -23,7 +23,7 @@ import {
   getAccessibleProviders,
   hasOpenRouter,
   type ApiKeysConfig,
-} from "./api-keys.js";
+} from "./api-keys";
 import {
   route,
   getFallbackChain,
@@ -33,20 +33,20 @@ import {
   type RoutingDecision,
   type RoutingConfig,
   type ModelPricing,
-} from "./router/index.js";
-import { BLOCKRUN_MODELS, resolveModelAlias, getModelContextWindow } from "./models.js";
-import { logUsage, type UsageEntry } from "./logger.js";
-import { getStats } from "./stats.js";
-import { RequestDeduplicator } from "./dedup.js";
-import { USER_AGENT } from "./version.js";
-import { SessionStore, getSessionId, type SessionConfig } from "./session.js";
-import { resolveOpenRouterModelId, ensureOpenRouterCache } from "./openrouter-models.js";
+} from "./router/index";
+import { BLOCKRUN_MODELS, resolveModelAlias, getModelContextWindow } from "./models";
+import { logUsage, type UsageEntry } from "./logger";
+import { getStats } from "./stats";
+import { RequestDeduplicator } from "./dedup";
+import { USER_AGENT } from "./version";
+import { SessionStore, getSessionId, type SessionConfig } from "./session";
+import { resolveOpenRouterModelId, ensureOpenRouterCache } from "./openrouter-models";
 
 const AUTO_MODEL = "clawrouter/auto";
 const AUTO_MODEL_SHORT = "auto";
 const HEARTBEAT_INTERVAL_MS = 2_000;
 const DEFAULT_REQUEST_TIMEOUT_MS = 180_000;
-const DEFAULT_PORT = 8402;
+const DEFAULT_PORT = 8403;
 const MAX_FALLBACK_ATTEMPTS = 3;
 const HEALTH_CHECK_TIMEOUT_MS = 2_000;
 const RATE_LIMIT_COOLDOWN_MS = 60_000;
@@ -106,10 +106,18 @@ async function checkExistingProxy(port: number): Promise<boolean> {
 }
 
 const PROVIDER_ERROR_PATTERNS = [
-  /billing/i, /insufficient.*balance/i, /credits/i, /quota.*exceeded/i,
-  /rate.*limit/i, /model.*unavailable/i, /service.*unavailable/i,
-  /capacity/i, /overloaded/i, /temporarily.*unavailable/i,
-  /api.*key.*invalid/i, /authentication.*failed/i,
+  /billing/i,
+  /insufficient.*balance/i,
+  /credits/i,
+  /quota.*exceeded/i,
+  /rate.*limit/i,
+  /model.*unavailable/i,
+  /service.*unavailable/i,
+  /capacity/i,
+  /overloaded/i,
+  /temporarily.*unavailable/i,
+  /api.*key.*invalid/i,
+  /authentication.*failed/i,
 ];
 
 const FALLBACK_STATUS_CODES = [400, 401, 402, 403, 404, 405, 429, 500, 502, 503, 504];
@@ -152,7 +160,10 @@ function sanitizeToolIds(messages: ChatMessage[]): ChatMessage[] {
       const newToolCalls = typedMsg.tool_calls.map((tc) => {
         if (tc.id && typeof tc.id === "string") {
           const s = sanitizeToolId(tc.id);
-          if (s !== tc.id) { msgChanged = true; return { ...tc, id: s }; }
+          if (s !== tc.id) {
+            msgChanged = true;
+            return { ...tc, id: s };
+          }
         }
         return tc;
       });
@@ -161,7 +172,10 @@ function sanitizeToolIds(messages: ChatMessage[]): ChatMessage[] {
 
     if (typedMsg.tool_call_id && typeof typedMsg.tool_call_id === "string") {
       const s = sanitizeToolId(typedMsg.tool_call_id);
-      if (s !== typedMsg.tool_call_id) { msgChanged = true; newMsg = { ...newMsg, tool_call_id: s }; }
+      if (s !== typedMsg.tool_call_id) {
+        msgChanged = true;
+        newMsg = { ...newMsg, tool_call_id: s };
+      }
     }
 
     if (Array.isArray(typedMsg.content)) {
@@ -171,19 +185,35 @@ function sanitizeToolIds(messages: ChatMessage[]): ChatMessage[] {
         let newBlock = { ...block };
         if (block.type === "tool_use" && block.id && typeof block.id === "string") {
           const s = sanitizeToolId(block.id);
-          if (s !== block.id) { blockChanged = true; newBlock = { ...newBlock, id: s }; }
+          if (s !== block.id) {
+            blockChanged = true;
+            newBlock = { ...newBlock, id: s };
+          }
         }
-        if (block.type === "tool_result" && block.tool_use_id && typeof block.tool_use_id === "string") {
+        if (
+          block.type === "tool_result" &&
+          block.tool_use_id &&
+          typeof block.tool_use_id === "string"
+        ) {
           const s = sanitizeToolId(block.tool_use_id);
-          if (s !== block.tool_use_id) { blockChanged = true; newBlock = { ...newBlock, tool_use_id: s }; }
+          if (s !== block.tool_use_id) {
+            blockChanged = true;
+            newBlock = { ...newBlock, tool_use_id: s };
+          }
         }
-        if (blockChanged) { msgChanged = true; return newBlock; }
+        if (blockChanged) {
+          msgChanged = true;
+          return newBlock;
+        }
         return block;
       });
       if (msgChanged) newMsg = { ...newMsg, content: newContent };
     }
 
-    if (msgChanged) { hasChanges = true; return newMsg; }
+    if (msgChanged) {
+      hasChanges = true;
+      return newMsg;
+    }
     return msg;
   });
   return hasChanges ? sanitized : messages;
@@ -195,7 +225,10 @@ function normalizeMessageRoles(messages: ChatMessage[]): ChatMessage[] {
   const normalized = messages.map((msg) => {
     if (VALID_ROLES.has(msg.role)) return msg;
     const mapped = ROLE_MAPPINGS[msg.role];
-    if (mapped) { hasChanges = true; return { ...msg, role: mapped }; }
+    if (mapped) {
+      hasChanges = true;
+      return { ...msg, role: mapped };
+    }
     hasChanges = true;
     return { ...msg, role: "user" };
   });
@@ -206,7 +239,10 @@ function normalizeMessagesForGoogle(messages: ChatMessage[]): ChatMessage[] {
   if (!messages || messages.length === 0) return messages;
   let firstNonSystemIdx = -1;
   for (let i = 0; i < messages.length; i++) {
-    if (messages[i].role !== "system") { firstNonSystemIdx = i; break; }
+    if (messages[i].role !== "system") {
+      firstNonSystemIdx = i;
+      break;
+    }
   }
   if (firstNonSystemIdx === -1) return messages;
   const firstRole = messages[firstNonSystemIdx].role;
@@ -229,7 +265,13 @@ function normalizeMessagesForThinking(messages: ExtendedChatMessage[]): Extended
   if (!messages || messages.length === 0) return messages;
   let hasChanges = false;
   const normalized = messages.map((msg) => {
-    if (msg.role === "assistant" && msg.tool_calls && Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0 && msg.reasoning_content === undefined) {
+    if (
+      msg.role === "assistant" &&
+      msg.tool_calls &&
+      Array.isArray(msg.tool_calls) &&
+      msg.tool_calls.length > 0 &&
+      msg.reasoning_content === undefined
+    ) {
       hasChanges = true;
       return { ...msg, reasoning_content: "" };
     }
@@ -241,7 +283,8 @@ function normalizeMessagesForThinking(messages: ExtendedChatMessage[]): Extended
 const KIMI_BLOCK_RE = /<[｜|][^<>]*begin[^<>]*[｜|]>[\s\S]*?<[｜|][^<>]*end[^<>]*[｜|]>/gi;
 const KIMI_TOKEN_RE = /<[｜|][^<>]*[｜|]>/g;
 const THINKING_TAG_RE = /<\s*\/?\s*(?:think(?:ing)?|thought|antthinking)\b[^>]*>/gi;
-const THINKING_BLOCK_RE = /<\s*(?:think(?:ing)?|thought|antthinking)\b[^>]*>[\s\S]*?<\s*\/\s*(?:think(?:ing)?|thought|antthinking)\s*>/gi;
+const THINKING_BLOCK_RE =
+  /<\s*(?:think(?:ing)?|thought|antthinking)\b[^>]*>[\s\S]*?<\s*\/\s*(?:think(?:ing)?|thought|antthinking)\s*>/gi;
 
 function stripThinkingTokens(content: string): string {
   if (!content) return content;
@@ -254,10 +297,10 @@ function stripThinkingTokens(content: string): string {
 
 function convertToAnthropicFormat(parsed: Record<string, unknown>): Record<string, unknown> {
   const messages = (parsed.messages as ChatMessage[]) || [];
-  
+
   let system: string | undefined;
   const nonSystemMessages: Array<{ role: string; content: string | unknown }> = [];
-  
+
   for (const msg of messages) {
     if (msg.role === "system") {
       system = typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content);
@@ -284,28 +327,41 @@ function convertToAnthropicFormat(parsed: Record<string, unknown>): Record<strin
   return result;
 }
 
-function convertAnthropicResponseToOpenAI(anthropicData: Record<string, unknown>): Record<string, unknown> {
+function convertAnthropicResponseToOpenAI(
+  anthropicData: Record<string, unknown>,
+): Record<string, unknown> {
   const content = anthropicData.content as Array<{ type: string; text?: string }> | undefined;
-  const textContent = content?.filter(b => b.type === "text").map(b => b.text).join("") || "";
-  
+  const textContent =
+    content
+      ?.filter((b) => b.type === "text")
+      .map((b) => b.text)
+      .join("") || "";
+
   return {
     id: (anthropicData.id as string) || `chatcmpl-${Date.now()}`,
     object: "chat.completion",
     created: Math.floor(Date.now() / 1000),
     model: anthropicData.model,
-    choices: [{
-      index: 0,
-      message: {
-        role: "assistant",
-        content: textContent,
+    choices: [
+      {
+        index: 0,
+        message: {
+          role: "assistant",
+          content: textContent,
+        },
+        finish_reason:
+          anthropicData.stop_reason === "end_turn" ? "stop" : anthropicData.stop_reason || "stop",
       },
-      finish_reason: anthropicData.stop_reason === "end_turn" ? "stop" : (anthropicData.stop_reason || "stop"),
-    }],
-    usage: anthropicData.usage ? {
-      prompt_tokens: (anthropicData.usage as Record<string, number>).input_tokens || 0,
-      completion_tokens: (anthropicData.usage as Record<string, number>).output_tokens || 0,
-      total_tokens: ((anthropicData.usage as Record<string, number>).input_tokens || 0) + ((anthropicData.usage as Record<string, number>).output_tokens || 0),
-    } : undefined,
+    ],
+    usage: anthropicData.usage
+      ? {
+          prompt_tokens: (anthropicData.usage as Record<string, number>).input_tokens || 0,
+          completion_tokens: (anthropicData.usage as Record<string, number>).output_tokens || 0,
+          total_tokens:
+            ((anthropicData.usage as Record<string, number>).input_tokens || 0) +
+            ((anthropicData.usage as Record<string, number>).output_tokens || 0),
+        }
+      : undefined,
   };
 }
 
@@ -352,7 +408,9 @@ function buildUpstreamUrl(
   modelId: string,
   path: string,
   apiKeys: ApiKeysConfig,
-): { url: string; provider: string; apiKey: string; actualModelId: string; viaOpenRouter: boolean } | undefined {
+):
+  | { url: string; provider: string; apiKey: string; actualModelId: string; viaOpenRouter: boolean }
+  | undefined {
   const access = resolveProviderAccess(apiKeys, modelId);
   if (!access) return undefined;
 
@@ -373,9 +431,7 @@ function buildUpstreamUrl(
 
   const actualModelId = modelId.includes("/") ? modelId.split("/").slice(1).join("/") : modelId;
 
-  const normalizedPath = baseUrl.endsWith("/v1") && path.startsWith("/v1")
-    ? path.slice(3)
-    : path;
+  const normalizedPath = baseUrl.endsWith("/v1") && path.startsWith("/v1") ? path.slice(3) : path;
 
   if (provider === "google") {
     return {
@@ -413,7 +469,11 @@ function buildUpstreamUrl(
   };
 }
 
-function buildProviderHeaders(provider: string, apiKey: string, viaOpenRouter = false): Record<string, string> {
+function buildProviderHeaders(
+  provider: string,
+  apiKey: string,
+  viaOpenRouter = false,
+): Record<string, string> {
   const headers: Record<string, string> = {
     "content-type": "application/json",
     "user-agent": USER_AGENT,
@@ -499,7 +559,9 @@ async function tryModelRequest(
   const headers = buildProviderHeaders(upstream.provider, upstream.apiKey, upstream.viaOpenRouter);
 
   try {
-    console.log(`[ClawRouter] → ${upstream.provider} ${upstream.url} model=${upstream.actualModelId} viaOR=${upstream.viaOpenRouter}`);
+    console.log(
+      `[ClawRouter] → ${upstream.provider} ${upstream.url} model=${upstream.actualModelId} viaOR=${upstream.viaOpenRouter}`,
+    );
     const response = await fetch(upstream.url, {
       method,
       headers,
@@ -553,16 +615,20 @@ async function handleChatCompletion(
     modelId = (parsed.model as string) || "";
     maxTokens = (parsed.max_tokens as number) || 4096;
 
-    const normalizedModel = typeof parsed.model === "string" ? parsed.model.trim().toLowerCase() : "";
+    const normalizedModel =
+      typeof parsed.model === "string" ? parsed.model.trim().toLowerCase() : "";
     const resolvedModel = resolveModelAlias(normalizedModel);
     const wasAlias = resolvedModel !== normalizedModel;
 
-    const isAutoModel = normalizedModel === AUTO_MODEL.toLowerCase() ||
+    const isAutoModel =
+      normalizedModel === AUTO_MODEL.toLowerCase() ||
       normalizedModel === AUTO_MODEL_SHORT.toLowerCase() ||
       normalizedModel === "blockrun/auto" ||
       normalizedModel === "clawrouter/auto";
 
-    console.log(`[ClawRouter] Received model: "${parsed.model}" -> normalized: "${normalizedModel}"${wasAlias ? ` -> alias: "${resolvedModel}"` : ""}, isAuto: ${isAutoModel}`);
+    console.log(
+      `[ClawRouter] Received model: "${parsed.model}" -> normalized: "${normalizedModel}"${wasAlias ? ` -> alias: "${resolvedModel}"` : ""}, isAuto: ${isAutoModel}`,
+    );
 
     if (wasAlias && !isAutoModel) {
       parsed.model = resolvedModel;
@@ -575,7 +641,9 @@ async function handleChatCompletion(
       const existingSession = sessionId ? sessionStore.getSession(sessionId) : undefined;
 
       if (existingSession) {
-        console.log(`[ClawRouter] Session ${sessionId?.slice(0, 8)}... using pinned model: ${existingSession.model}`);
+        console.log(
+          `[ClawRouter] Session ${sessionId?.slice(0, 8)}... using pinned model: ${existingSession.model}`,
+        );
         parsed.model = existingSession.model;
         modelId = existingSession.model;
         sessionStore.touchSession(sessionId!);
@@ -588,7 +656,10 @@ async function handleChatCompletion(
           if (typeof content === "string") return content;
           if (Array.isArray(content)) {
             return content
-              .filter((p): p is ContentPart & { text: string } => p.type === "text" && typeof p.text === "string")
+              .filter(
+                (p): p is ContentPart & { text: string } =>
+                  p.type === "text" && typeof p.text === "string",
+              )
               .map((p) => p.text)
               .join("\n");
           }
@@ -598,7 +669,10 @@ async function handleChatCompletion(
         let lastUserMsg: Msg | undefined;
         if (messages) {
           for (let i = messages.length - 1; i >= 0; i--) {
-            if (messages[i].role === "user") { lastUserMsg = messages[i]; break; }
+            if (messages[i].role === "user") {
+              lastUserMsg = messages[i];
+              break;
+            }
           }
         }
         const systemMsg = messages?.find((m: Msg) => m.role === "system");
@@ -612,7 +686,11 @@ async function handleChatCompletion(
           const chain = [tierConfig.primary, ...tierConfig.fallback];
           const available = chain.find((m) => isModelAccessible(options.apiKeys, m));
           if (available) {
-            routingDecision = { ...routingDecision, model: available, reasoning: routingDecision.reasoning + ` | rerouted to ${available} (key available)` };
+            routingDecision = {
+              ...routingDecision,
+              model: available,
+              reasoning: routingDecision.reasoning + ` | rerouted to ${available} (key available)`,
+            };
           }
         }
 
@@ -636,12 +714,18 @@ async function handleChatCompletion(
   const dedupKey = RequestDeduplicator.hash(modifiedBody);
   const cached = deduplicator.getCached(dedupKey);
   if (cached) {
-    return new Response(new Uint8Array(cached.body), { status: cached.status, headers: cached.headers });
+    return new Response(new Uint8Array(cached.body), {
+      status: cached.status,
+      headers: cached.headers,
+    });
   }
   const inflight = deduplicator.getInflight(dedupKey);
   if (inflight) {
     const result = await inflight;
-    return new Response(new Uint8Array(result.body), { status: result.status, headers: result.headers });
+    return new Response(new Uint8Array(result.body), {
+      status: result.status,
+      headers: result.headers,
+    });
   }
   deduplicator.markInflight(dedupKey);
 
@@ -654,9 +738,17 @@ async function handleChatCompletion(
     if (routingDecision) {
       const estimatedInputTokens = Math.ceil(modifiedBody.length / 4);
       const estimatedTotalTokens = estimatedInputTokens + maxTokens;
-      const useAgenticTiers = routingDecision.reasoning?.includes("agentic") && routerOpts.config.agenticTiers;
-      const tierConfigs = useAgenticTiers ? routerOpts.config.agenticTiers! : routerOpts.config.tiers;
-      const contextFiltered = getFallbackChainFiltered(routingDecision.tier, tierConfigs, estimatedTotalTokens, getModelContextWindow);
+      const useAgenticTiers =
+        routingDecision.reasoning?.includes("agentic") && routerOpts.config.agenticTiers;
+      const tierConfigs = useAgenticTiers
+        ? routerOpts.config.agenticTiers!
+        : routerOpts.config.tiers;
+      const contextFiltered = getFallbackChainFiltered(
+        routingDecision.tier,
+        tierConfigs,
+        estimatedTotalTokens,
+        getModelContextWindow,
+      );
       modelsToTry = contextFiltered.slice(0, MAX_FALLBACK_ATTEMPTS);
       modelsToTry = modelsToTry.filter((m) => isModelAccessible(options.apiKeys, m));
       modelsToTry = prioritizeNonRateLimited(modelsToTry);
@@ -673,7 +765,15 @@ async function handleChatCompletion(
       const isLastAttempt = i === modelsToTry.length - 1;
       console.log(`[ClawRouter] Trying model ${i + 1}/${modelsToTry.length}: ${tryModel}`);
 
-      const result = await tryModelRequest(tryModel, requestPath, req.method ?? "POST", modifiedBody, maxTokens, options.apiKeys, controller.signal);
+      const result = await tryModelRequest(
+        tryModel,
+        requestPath,
+        req.method ?? "POST",
+        modifiedBody,
+        maxTokens,
+        options.apiKeys,
+        controller.signal,
+      );
 
       if (result.success && result.response) {
         upstream = result.response;
@@ -685,7 +785,9 @@ async function handleChatCompletion(
       lastError = { body: result.errorBody || "Unknown error", status: result.errorStatus || 500 };
       if (result.isProviderError && !isLastAttempt) {
         if (result.errorStatus === 429) markRateLimited(tryModel);
-        console.log(`[ClawRouter] Provider error from ${tryModel}, trying fallback: ${result.errorBody?.slice(0, 100)}`);
+        console.log(
+          `[ClawRouter] Provider error from ${tryModel}, trying fallback: ${result.errorBody?.slice(0, 100)}`,
+        );
         continue;
       }
       break;
@@ -694,7 +796,11 @@ async function handleChatCompletion(
     clearTimeout(timeoutId);
 
     if (routingDecision && actualModelUsed !== routingDecision.model) {
-      routingDecision = { ...routingDecision, model: actualModelUsed, reasoning: `${routingDecision.reasoning} | fallback to ${actualModelUsed}` };
+      routingDecision = {
+        ...routingDecision,
+        model: actualModelUsed,
+        reasoning: `${routingDecision.reasoning} | fallback to ${actualModelUsed}`,
+      };
       options.onRouted?.(routingDecision);
     }
 
@@ -703,12 +809,28 @@ async function handleChatCompletion(
       const errStatus = lastError?.status || 502;
       if (isStreaming) {
         const errEvent = `data: ${JSON.stringify({ error: { message: errBody, type: "provider_error", status: errStatus } })}\n\n`;
-        deduplicator.complete(dedupKey, { status: 200, headers: { "content-type": "text/event-stream" }, body: Buffer.from(errEvent + "data: [DONE]\n\n"), completedAt: Date.now() });
-        return new Response(errEvent + "data: [DONE]\n\n", { status: 200, headers: { "content-type": "text/event-stream" } });
+        deduplicator.complete(dedupKey, {
+          status: 200,
+          headers: { "content-type": "text/event-stream" },
+          body: Buffer.from(errEvent + "data: [DONE]\n\n"),
+          completedAt: Date.now(),
+        });
+        return new Response(errEvent + "data: [DONE]\n\n", {
+          status: 200,
+          headers: { "content-type": "text/event-stream" },
+        });
       } else {
         const errJson = JSON.stringify({ error: { message: errBody, type: "provider_error" } });
-        deduplicator.complete(dedupKey, { status: errStatus, headers: { "content-type": "application/json" }, body: Buffer.from(errJson), completedAt: Date.now() });
-        return new Response(errJson, { status: errStatus, headers: { "content-type": "application/json" } });
+        deduplicator.complete(dedupKey, {
+          status: errStatus,
+          headers: { "content-type": "application/json" },
+          body: Buffer.from(errJson),
+          completedAt: Date.now(),
+        });
+        return new Response(errJson, {
+          status: errStatus,
+          headers: { "content-type": "application/json" },
+        });
       }
     }
 
@@ -743,7 +865,10 @@ async function handleChatCompletion(
             const jsonBody = Buffer.concat(chunks);
             const jsonStr = jsonBody.toString();
 
-            const isSSE = jsonStr.startsWith("data: ") || jsonStr.startsWith("event: ") || jsonStr.startsWith(": ");
+            const isSSE =
+              jsonStr.startsWith("data: ") ||
+              jsonStr.startsWith("event: ") ||
+              jsonStr.startsWith(": ");
             if (isSSE) {
               const cleaned = jsonStr
                 .split("\n")
@@ -767,11 +892,20 @@ async function handleChatCompletion(
                   const converted = convertAnthropicResponseToOpenAI(rawParsed);
                   responseJson = JSON.stringify(converted);
                 }
-              } catch { /* not JSON */ }
+              } catch {
+                /* not JSON */
+              }
               try {
                 const rsp = JSON.parse(responseJson) as {
-                  id?: string; created?: number; model?: string;
-                  choices?: Array<{ index?: number; message?: { role?: string; content?: string; tool_calls?: unknown[] }; delta?: { role?: string; content?: string; tool_calls?: unknown[] }; finish_reason?: string | null }>;
+                  id?: string;
+                  created?: number;
+                  model?: string;
+                  choices?: Array<{
+                    index?: number;
+                    message?: { role?: string; content?: string; tool_calls?: unknown[] };
+                    delta?: { role?: string; content?: string; tool_calls?: unknown[] };
+                    finish_reason?: string | null;
+                  }>;
                 };
 
                 const baseChunk = {
@@ -822,19 +956,34 @@ async function handleChatCompletion(
           await writer.write(encoder.encode("data: [DONE]\n\n"));
           responseChunks.push(Buffer.from("data: [DONE]\n\n"));
         } catch (err) {
-          console.error(`[ClawRouter] Stream error: ${err instanceof Error ? err.message : String(err)}`);
+          console.error(
+            `[ClawRouter] Stream error: ${err instanceof Error ? err.message : String(err)}`,
+          );
         } finally {
           clearInterval(heartbeatInterval);
-          deduplicator.complete(dedupKey, { status: 200, headers: { "content-type": "text/event-stream" }, body: Buffer.concat(responseChunks), completedAt: Date.now() });
+          deduplicator.complete(dedupKey, {
+            status: 200,
+            headers: { "content-type": "text/event-stream" },
+            body: Buffer.concat(responseChunks),
+            completedAt: Date.now(),
+          });
           await writer.close().catch(() => {});
         }
       })();
 
-      return new Response(readable, { status: 200, headers: { "content-type": "text/event-stream", "cache-control": "no-cache", "connection": "keep-alive" } });
+      return new Response(readable, {
+        status: 200,
+        headers: {
+          "content-type": "text/event-stream",
+          "cache-control": "no-cache",
+          connection: "keep-alive",
+        },
+      });
     } else {
       const responseHeaders: Record<string, string> = {};
       upstream.headers.forEach((value, key) => {
-        if (key === "transfer-encoding" || key === "connection" || key === "content-encoding") return;
+        if (key === "transfer-encoding" || key === "connection" || key === "content-encoding")
+          return;
         responseHeaders[key] = value;
       });
 
@@ -851,7 +1000,7 @@ async function handleChatCompletion(
         }
       }
       let finalBody = Buffer.concat(responseChunks);
-      
+
       try {
         const rawParsed = JSON.parse(finalBody.toString());
         if (rawParsed.type === "message" && rawParsed.content) {
@@ -859,15 +1008,23 @@ async function handleChatCompletion(
           finalBody = Buffer.from(JSON.stringify(converted));
           responseHeaders["content-type"] = "application/json";
         }
-      } catch { /* not JSON, pass through */ }
-      
-      deduplicator.complete(dedupKey, { status: upstream.status, headers: responseHeaders, body: finalBody, completedAt: Date.now() });
+      } catch {
+        /* not JSON, pass through */
+      }
+
+      deduplicator.complete(dedupKey, {
+        status: upstream.status,
+        headers: responseHeaders,
+        body: finalBody,
+        completedAt: Date.now(),
+      });
       return new Response(finalBody, { status: upstream.status, headers: responseHeaders });
     }
   } catch (err) {
     clearTimeout(timeoutId);
     deduplicator.removeInflight(dedupKey);
-    if (err instanceof Error && err.name === "AbortError") throw new Error(`Request timed out after ${timeoutMs}ms`);
+    if (err instanceof Error && err.name === "AbortError")
+      throw new Error(`Request timed out after ${timeoutMs}ms`);
     throw err;
   }
 }
@@ -903,17 +1060,20 @@ export async function startProxy(options: ProxyOptions): Promise<ProxyHandle> {
 
         if (pathname === "/health" || pathname.startsWith("/health")) {
           const accessibleProviders = getAccessibleProviders(options.apiKeys);
-          return new Response(JSON.stringify({
-            status: "ok",
-            configuredProviders,
-            openRouterFallback: hasOpenRouter(options.apiKeys),
-            accessibleProviders,
-            modelCount: BLOCKRUN_MODELS.filter((m) => {
-              if (m.id === "auto") return false;
-              const provider = getProviderFromModel(m.id);
-              return accessibleProviders.includes(provider);
-            }).length,
-          }), { status: 200, headers: { "Content-Type": "application/json" } });
+          return new Response(
+            JSON.stringify({
+              status: "ok",
+              configuredProviders,
+              openRouterFallback: hasOpenRouter(options.apiKeys),
+              accessibleProviders,
+              modelCount: BLOCKRUN_MODELS.filter((m) => {
+                if (m.id === "auto") return false;
+                const provider = getProviderFromModel(m.id);
+                return accessibleProviders.includes(provider);
+              }).length,
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
         }
 
         if (pathname === "/stats" || pathname.startsWith("/stats")) {
@@ -921,38 +1081,55 @@ export async function startProxy(options: ProxyOptions): Promise<ProxyHandle> {
             const urlObj = new URL(url);
             const days = parseInt(urlObj.searchParams.get("days") || "7", 10);
             const stats = await getStats(Math.min(days, 30));
-            return new Response(JSON.stringify(stats, null, 2), { status: 200, headers: { "Content-Type": "application/json", "Cache-Control": "no-cache" } });
+            return new Response(JSON.stringify(stats, null, 2), {
+              status: 200,
+              headers: { "Content-Type": "application/json", "Cache-Control": "no-cache" },
+            });
           } catch (err) {
-            return new Response(JSON.stringify({ error: `Failed to get stats: ${err instanceof Error ? err.message : String(err)}` }), { status: 500, headers: { "Content-Type": "application/json" } });
+            return new Response(
+              JSON.stringify({
+                error: `Failed to get stats: ${err instanceof Error ? err.message : String(err)}`,
+              }),
+              { status: 500, headers: { "Content-Type": "application/json" } },
+            );
           }
         }
 
         if (pathname === "/v1/models" && req.method === "GET") {
           const accessibleProviders = getAccessibleProviders(options.apiKeys);
-          const models = BLOCKRUN_MODELS
-            .filter((m) => {
-              if (m.id === "auto") return true;
-              const provider = getProviderFromModel(m.id);
-              return accessibleProviders.includes(provider);
-            })
-            .map((m) => ({
-              id: m.id,
-              object: "model",
-              created: Math.floor(Date.now() / 1000),
-              owned_by: m.id.split("/")[0] || "clawrouter",
-            }));
-          return new Response(JSON.stringify({ object: "list", data: models }), { status: 200, headers: { "Content-Type": "application/json" } });
+          const models = BLOCKRUN_MODELS.filter((m) => {
+            if (m.id === "auto") return true;
+            const provider = getProviderFromModel(m.id);
+            return accessibleProviders.includes(provider);
+          }).map((m) => ({
+            id: m.id,
+            object: "model",
+            created: Math.floor(Date.now() / 1000),
+            owned_by: m.id.split("/")[0] || "clawrouter",
+          }));
+          return new Response(JSON.stringify({ object: "list", data: models }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
         }
 
         if (!pathname.startsWith("/v1")) {
-          return new Response(JSON.stringify({ error: "Not found" }), { status: 404, headers: { "Content-Type": "application/json" } });
+          return new Response(JSON.stringify({ error: "Not found" }), {
+            status: 404,
+            headers: { "Content-Type": "application/json" },
+          });
         }
 
         return handleChatCompletion(req, options, routerOpts, deduplicator, sessionStore);
       } catch (err) {
         const error = err instanceof Error ? err : new Error(String(err));
         options.onError?.(error);
-        return new Response(JSON.stringify({ error: { message: `Proxy error: ${error.message}`, type: "proxy_error" } }), { status: 502, headers: { "Content-Type": "application/json" } });
+        return new Response(
+          JSON.stringify({
+            error: { message: `Proxy error: ${error.message}`, type: "proxy_error" },
+          }),
+          { status: 502, headers: { "Content-Type": "application/json" } },
+        );
       }
     },
     error(err) {

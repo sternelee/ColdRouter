@@ -24,8 +24,8 @@
     "openclaw.plugin.json"
   ],
   "scripts": {
-    "build": "bun build --target=browser --outdir=dist --splitting --sourcemap src/index.ts",
-    "dev": "bun run src/index.ts",
+    "build": "bun build --target=node --outdir=dist --splitting --sourcemap src/index.ts && bun build --target=node --outdir=dist --sourcemap src/cli.ts",
+    "dev": "bun run src/cli.ts",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [

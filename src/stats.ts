@@ -8,7 +8,7 @@
 import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { homedir } from "node:os";
-import type { UsageEntry } from "./logger.js";
+import type { UsageEntry } from "./logger";
 
 const LOG_DIR = join(homedir(), ".openclaw", "clawrouter", "logs");
 

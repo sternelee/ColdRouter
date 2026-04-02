@@ -5,9 +5,9 @@
  * Uses a local proxy to handle smart routing to provider APIs.
  */
 
-import type { ProviderPlugin } from "./types.js";
-import { buildProviderModels } from "./models.js";
-import type { ProxyHandle } from "./proxy.js";
+import type { ProviderPlugin } from "./types";
+import { buildProviderModels } from "./models";
+import type { ProxyHandle } from "./proxy";
 
 let activeProxy: ProxyHandle | null = null;
 
@@ -28,7 +28,7 @@ export const clawrouterProvider: ProviderPlugin = {
 
   get models() {
     if (!activeProxy) {
-      return buildProviderModels("http://127.0.0.1:8402");
+      return buildProviderModels("http://127.0.0.1:8403");
     }
     return buildProviderModels(activeProxy.baseUrl);
   },

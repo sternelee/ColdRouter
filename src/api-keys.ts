@@ -33,9 +33,7 @@ export const PROVIDER_ENDPOINTS: Record<string, string> = {
  * Providers that accept the OpenAI /v1/chat/completions format.
  * Anthropic and Google use incompatible APIs and must go via OpenRouter.
  */
-const OPENAI_COMPATIBLE_PROVIDERS = new Set([
-  "openai", "xai", "deepseek", "moonshot", "nvidia",
-]);
+const OPENAI_COMPATIBLE_PROVIDERS = new Set(["openai", "xai", "deepseek", "moonshot", "nvidia"]);
 
 /** Environment variable names per provider */
 const ENV_VAR_MAP: Record<string, string> = {

@@ -40,7 +40,7 @@ console.log("\n═══ Part 1: getProxyPort() ═══\n");
   // Test 1: Default port when env var not set
   delete process.env.BLOCKRUN_PROXY_PORT;
   const defaultPort = getProxyPort();
-  assert(defaultPort === 8402, `Default port is 8402: ${defaultPort}`);
+  assert(defaultPort === 8403, `Default port is 8403: ${defaultPort}`);
 
   // Test 2: Custom port from env var
   process.env.BLOCKRUN_PROXY_PORT = "9999";
@@ -50,17 +50,17 @@ console.log("\n═══ Part 1: getProxyPort() ═══\n");
   // Test 3: Invalid port falls back to default
   process.env.BLOCKRUN_PROXY_PORT = "invalid";
   const invalidPort = getProxyPort();
-  assert(invalidPort === 8402, `Invalid env falls back to 8402: ${invalidPort}`);
+  assert(invalidPort === 8403, `Invalid env falls back to 8403: ${invalidPort}`);
 
   // Test 4: Out of range port falls back to default
   process.env.BLOCKRUN_PROXY_PORT = "99999";
   const outOfRange = getProxyPort();
-  assert(outOfRange === 8402, `Out of range falls back to 8402: ${outOfRange}`);
+  assert(outOfRange === 8403, `Out of range falls back to 8403: ${outOfRange}`);
 
   // Test 5: Zero port falls back to default
   process.env.BLOCKRUN_PROXY_PORT = "0";
   const zeroPort = getProxyPort();
-  assert(zeroPort === 8402, `Zero falls back to 8402: ${zeroPort}`);
+  assert(zeroPort === 8403, `Zero falls back to 8403: ${zeroPort}`);
 
   // Restore original env value
   if (originalPort !== undefined) {
@@ -82,7 +82,7 @@ console.log("\n═══ Part 2: Proxy Reuse ═══\n");
   console.log(`  Using test wallet: ${account.address}`);
 
   // Use a random port to avoid conflicts
-  const testPort = 18402 + Math.floor(Math.random() * 1000);
+  const testPort = 18403 + Math.floor(Math.random() * 1000);
   console.log(`  Using test port: ${testPort}`);
 
   try {
