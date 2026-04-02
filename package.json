@@ -1,12 +1,12 @@
 {
-  "name": "clawrouter",
+  "name": "coldrouter",
   "version": "1.0.0",
   "description": "Smart LLM router — your API keys, intelligent routing, maximum savings. No crypto required.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "clawrouter": "./dist/cli.js"
+    "coldrouter": "./dist/cli.js"
   },
   "openclaw": {
     "extensions": [
@@ -26,7 +26,7 @@
   "scripts": {
     "build": "bun build --target=node --outdir=dist --splitting --sourcemap src/index.ts && bun build --target=node --outdir=dist --sourcemap src/cli.ts",
     "dev": "bun run src/cli.ts",
-    "typecheck": "bun build --target=node --outdir=/tmp/clawrouter-check src/index.ts src/cli.ts 2>&1 && echo 'Build successful' || echo 'Build failed'"
+    "typecheck": "bun build --target=node --outdir=/tmp/coldrouter-check src/index.ts src/cli.ts 2>&1 && echo 'Build successful' || echo 'Build failed'"
   },
   "keywords": [
     "llm",

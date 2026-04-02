@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
- * ClawRouter CLI — Standalone proxy mode
+ * ColdRouter CLI — Standalone proxy mode
  *
  * Usage:
- *   npx clawrouter              # Start standalone proxy
- *   npx clawrouter --version    # Show version
+ *   npx coldrouter              # Start standalone proxy
+ *   npx coldrouter --version    # Show version
  */
 
 import { startProxy, getProxyPort } from "./proxy";
@@ -18,10 +18,10 @@ import { VERSION } from "./version";
 
 function printHelp(): void {
   console.log(`
-ClawRouter v${VERSION} - Smart LLM Router (Direct API Keys)
+ColdRouter v${VERSION} - Smart LLM Router (Direct API Keys)
 
 Usage:
-  clawrouter [options]
+  coldrouter [options]
 
 Options:
   --version, -v     Show version number
@@ -32,10 +32,10 @@ Examples:
   # Set API keys and start
   export OPENAI_API_KEY=sk-...
   export ANTHROPIC_API_KEY=sk-ant-...
-  npx clawrouter
+  npx coldrouter
 
   # Custom port
-  npx clawrouter --port 9000
+  npx coldrouter --port 9000
 
 Environment Variables:
   OPENROUTER_API_KEY    OpenRouter key (one key → all models!)
@@ -46,7 +46,7 @@ Environment Variables:
   DEEPSEEK_API_KEY      DeepSeek API key (direct, cheaper)
   MOONSHOT_API_KEY      Moonshot/Kimi API key (direct, cheaper)
   NVIDIA_API_KEY        NVIDIA API key (direct, cheaper)
-  CLAWROUTER_PORT       Default proxy port (default: 8403)
+  COLDROUTER_PORT       Default proxy port (default: 8403)
 
   Direct keys take priority over OpenRouter for that provider's models.
 `);
@@ -81,43 +81,43 @@ async function main(): Promise<void> {
   const configured = getConfiguredProviders(apiKeys);
 
   if (configured.length === 0) {
-    console.error("[ClawRouter] No API keys configured!");
+    console.error("[ColdRouter] No API keys configured!");
     console.error(
-      "[ClawRouter] Quickest: export OPENROUTER_API_KEY=sk-or-...  (one key → all models)",
+      "[ColdRouter] Quickest: export OPENROUTER_API_KEY=sk-or-...  (one key → all models)",
     );
-    console.error("[ClawRouter] Or set individual keys: OPENAI_API_KEY, ANTHROPIC_API_KEY, etc.");
-    console.error("[ClawRouter] Or edit ~/.openclaw/clawrouter/configon");
+    console.error("[ColdRouter] Or set individual keys: OPENAI_API_KEY, ANTHROPIC_API_KEY, etc.");
+    console.error("[ColdRouter] Or edit ~/.openclaw/coldrouter/configon");
     process.exit(1);
   }
 
   const accessible = getAccessibleProviders(apiKeys);
   const orFallback = hasOpenRouter(apiKeys);
   console.log(
-    `[ClawRouter] Configured providers: ${configured.join(", ")}${orFallback ? " (OpenRouter covers all)" : ""}`,
+    `[ColdRouter] Configured providers: ${configured.join(", ")}${orFallback ? " (OpenRouter covers all)" : ""}`,
   );
   console.log(
-    `[ClawRouter] Accessible providers: ${accessible.join(", ")} (${accessible.length} total)`,
+    `[ColdRouter] Accessible providers: ${accessible.join(", ")} (${accessible.length} total)`,
   );
 
   const proxy = await startProxy({
     apiKeys,
     port: args.port,
     onReady: (port) => {
-      console.log(`[ClawRouter] Proxy listening on http://127.0.0.1:${port}`);
-      console.log(`[ClawRouter] Health check: http://127.0.0.1:${port}/health`);
+      console.log(`[ColdRouter] Proxy listening on http://127.0.0.1:${port}`);
+      console.log(`[ColdRouter] Health check: http://127.0.0.1:${port}/health`);
     },
-    onError: (error) => console.error(`[ClawRouter] Error: ${error.message}`),
+    onError: (error) => console.error(`[ColdRouter] Error: ${error.message}`),
     onRouted: (decision) => {
       const cost = decision.costEstimate.toFixed(4);
       const saved = (decision.savings * 100).toFixed(0);
-      console.log(`[ClawRouter] [${decision.tier}] ${decision.model} ~$${cost} (saved ${saved}%)`);
+      console.log(`[ColdRouter] [${decision.tier}] ${decision.model} ~$${cost} (saved ${saved}%)`);
     },
   });
 
-  console.log(`[ClawRouter] Ready - Ctrl+C to stop`);
+  console.log(`[ColdRouter] Ready - Ctrl+C to stop`);
 
   const shutdown = async (signal: string) => {
-    console.log(`\n[ClawRouter] Received ${signal}, shutting down...`);
+    console.log(`\n[ColdRouter] Received ${signal}, shutting down...`);
     try {
       await proxy.close();
       process.exit(0);
@@ -132,6 +132,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
-  console.error(`[ClawRouter] Fatal: ${err.message}`);
+  console.error(`[ColdRouter] Fatal: ${err.message}`);
   process.exit(1);
 });

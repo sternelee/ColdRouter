@@ -1,12 +1,12 @@
 /**
  * OpenRouter Model ID Resolution
  *
- * ClawRouter uses internal model IDs like "moonshot/kimi-k2.5", but OpenRouter
+ * ColdRouter uses internal model IDs like "moonshot/kimi-k2.5", but OpenRouter
  * expects its own IDs like "moonshotai/kimi-k2.5". This module fetches
- * OpenRouter's model catalog and maps ClawRouter IDs to OpenRouter IDs.
+ * OpenRouter's model catalog and maps ColdRouter IDs to OpenRouter IDs.
  *
  * Matching strategy:
- *   1. Exact match — ClawRouter ID exists in OpenRouter catalog
+ *   1. Exact match — ColdRouter ID exists in OpenRouter catalog
  *   2. Name match — strip provider prefix, find OR model with same name part
  *   3. No match — pass through original ID (OpenRouter will error, triggering fallback)
  */
@@ -15,7 +15,7 @@ import { BLOCKRUN_MODELS } from "./models";
 
 type OpenRouterModel = { id: string; name?: string };
 
-let cache: Map<string, string> | null = null; // clawrouter ID → OpenRouter ID
+let cache: Map<string, string> | null = null; // coldrouter ID → OpenRouter ID
 let cacheTime = 0;
 const CACHE_TTL_MS = 3_600_000; // 1 hour
 
@@ -26,7 +26,7 @@ export async function refreshOpenRouterModels(apiKey: string): Promise<void> {
   const response = await fetch("https://openrouter.ai/api/v1/models", {
     headers: {
       authorization: `Bearer ${apiKey}`,
-      "user-agent": "ClawRouter",
+      "user-agent": "ColdRouter",
     },
   });
 
@@ -56,7 +56,7 @@ export async function refreshOpenRouterModels(apiKey: string): Promise<void> {
     }
   }
 
-  // Map each ClawRouter model to its OpenRouter equivalent
+  // Map each ColdRouter model to its OpenRouter equivalent
   const newCache = new Map<string, string>();
   for (const model of BLOCKRUN_MODELS) {
     if (model.id === "auto") continue;
@@ -86,22 +86,22 @@ export async function refreshOpenRouterModels(apiKey: string): Promise<void> {
 
   const mapped = [...newCache.entries()].filter(([k, v]) => k !== v);
   console.log(
-    `[ClawRouter] Loaded ${orModels.length} OpenRouter models, ${newCache.size} mapped (${mapped.length} remapped)`,
+    `[ColdRouter] Loaded ${orModels.length} OpenRouter models, ${newCache.size} mapped (${mapped.length} remapped)`,
   );
   if (mapped.length > 0) {
     for (const [from, to] of mapped) {
-      console.log(`[ClawRouter]   ${from} → ${to}`);
+      console.log(`[ColdRouter]   ${from} → ${to}`);
     }
   }
 }
 
 /**
- * Resolve a ClawRouter model ID to an OpenRouter model ID.
+ * Resolve a ColdRouter model ID to an OpenRouter model ID.
  * Returns the mapped ID, or the original if no mapping exists.
  */
-export function resolveOpenRouterModelId(clawrouterModelId: string): string {
-  if (!cache) return clawrouterModelId;
-  return cache.get(clawrouterModelId) ?? clawrouterModelId;
+export function resolveOpenRouterModelId(coldrouterModelId: string): string {
+  if (!cache) return coldrouterModelId;
+  return cache.get(coldrouterModelId) ?? coldrouterModelId;
 }
 
 /**
@@ -118,6 +118,6 @@ export function isOpenRouterCacheReady(): boolean {
 export function ensureOpenRouterCache(apiKey: string): void {
   if (isOpenRouterCacheReady()) return;
   refreshOpenRouterModels(apiKey).catch((err) => {
-    console.error(`[ClawRouter] Background OpenRouter cache refresh failed: ${err.message}`);
+    console.error(`[ColdRouter] Background OpenRouter cache refresh failed: ${err.message}`);
   });
 }

@@ -10,7 +10,7 @@ import { join } from "bun:path";
 import { homedir } from "bun:os";
 import type { UsageEntry } from "./logger";
 
-const LOG_DIR = join(homedir(), ".openclaw", "clawrouter", "logs");
+const LOG_DIR = join(homedir(), ".openclaw", "coldrouter", "logs");
 
 export type DailyStats = {
   date: string;
@@ -205,7 +205,7 @@ export function formatStatsAscii(stats: AggregatedStats): string {
 
   // Header
   lines.push("╔════════════════════════════════════════════════════════════╗");
-  lines.push("║              ClawRouter Usage Statistics                   ║");
+  lines.push("║              ColdRouter Usage Statistics                   ║");
   lines.push("╠════════════════════════════════════════════════════════════╣");
 
   // Summary

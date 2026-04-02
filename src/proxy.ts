@@ -43,7 +43,7 @@ import { SessionStore, getSessionId, type SessionConfig } from "./session";
 import { resolveOpenRouterModelId, ensureOpenRouterCache } from "./openrouter-models";
 import { getCustomModels } from "./model-registry";
 
-const AUTO_MODEL = "clawrouter/auto";
+const AUTO_MODEL = "coldrouter/auto";
 const AUTO_MODEL_SHORT = "auto";
 const HEARTBEAT_INTERVAL_MS = 2_000;
 const DEFAULT_REQUEST_TIMEOUT_MS = 180_000;
@@ -56,9 +56,9 @@ const PORT_RETRY_DELAY_MS = 1_000;
 
 // Global logger instance (set by startProxy)
 let proxyLogger: ProxyOptions["logger"] = {
-  info: (msg) => console.log(`[ClawRouter] ${msg}`),
-  warn: (msg) => console.warn(`[ClawRouter] ${msg}`),
-  error: (msg) => console.error(`[ClawRouter] ${msg}`),
+  info: (msg) => console.log(`[ColdRouter] ${msg}`),
+  warn: (msg) => console.warn(`[ColdRouter] ${msg}`),
+  error: (msg) => console.error(`[ColdRouter] ${msg}`),
 };
 
 const rateLimitedModels = new Map<string, number>();
@@ -88,7 +88,7 @@ function prioritizeNonRateLimited(models: string[]): string[] {
 }
 
 export function getProxyPort(): number {
-  const envPort = process.env.CLAWROUTER_PORT;
+  const envPort = process.env.COLDROUTER_PORT;
   if (envPort) {
     const parsed = parseInt(envPort, 10);
     if (!isNaN(parsed) && parsed > 0 && parsed < 65536) return parsed;
@@ -503,7 +503,7 @@ function buildProviderHeaders(
 
   if (viaOpenRouter) {
     headers["authorization"] = `Bearer ${apiKey}`;
-    headers["x-title"] = "ClawRouter";
+    headers["x-title"] = "ColdRouter";
     return headers;
   }
 
@@ -658,7 +658,7 @@ async function handleChatCompletion(
       normalizedModel === AUTO_MODEL.toLowerCase() ||
       normalizedModel === AUTO_MODEL_SHORT.toLowerCase() ||
       normalizedModel === "blockrun/auto" ||
-      normalizedModel === "clawrouter/auto";
+      normalizedModel === "coldrouter/auto";
 
     proxyLogger.info?.(
       `Received model: "${parsed.model}" -> normalized: "${normalizedModel}"${wasAlias ? ` -> alias: "${resolvedModel}"` : ""}, isAuto: ${isAutoModel}`,
@@ -1146,7 +1146,7 @@ export async function startProxy(options: ProxyOptions): Promise<ProxyHandle> {
             id: m.id,
             object: "model",
             created: Math.floor(Date.now() / 1000),
-            owned_by: m.id.split("/")[0] || "clawrouter",
+            owned_by: m.id.split("/")[0] || "coldrouter",
           }));
           return new Response(JSON.stringify({ object: "list", data: models }), {
             status: 200,

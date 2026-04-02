@@ -4,7 +4,7 @@
  * Manages per-provider API keys for direct provider access.
  * Keys can be configured via:
  *   1. Environment variables (OPENAI_API_KEY, ANTHROPIC_API_KEY, etc.)
- *   2. Config file (~/.openclaw/clawrouter/config.json)
+ *   2. Config file (~/.openclaw/coldrouter/config.json)
  *   3. Plugin config in openclaw.json
  */
 
@@ -12,7 +12,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from "bun:fs";
 import { join } from "bun:path";
 import { homedir } from "bun:os";
 
-const CONFIG_DIR = join(homedir(), ".openclaw", "clawrouter");
+const CONFIG_DIR = join(homedir(), ".openclaw", "coldrouter");
 const CONFIG_FILE = join(CONFIG_DIR, "config.json");
 
 export { CONFIG_FILE };

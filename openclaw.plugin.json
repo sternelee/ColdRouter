@@ -1,6 +1,6 @@
 {
-  "id": "clawrouter",
-  "name": "ClawRouter",
+  "id": "coldrouter",
+  "name": "ColdRouter",
   "description": "Smart LLM router — your API keys, intelligent routing, maximum savings",
   "configSchema": {
     "type": "object",

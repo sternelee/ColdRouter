@@ -14,4 +14,4 @@ const pkgPath = join(__dirname, "..", "package.json");
 const pkg = await import("bun:fs").then(m => m.readFileSync(pkgPath, "utf-8")).then(JSON.parse) as { version: string };
 
 export const VERSION = pkg.version;
-export const USER_AGENT = `clawrouter/${VERSION}`;
+export const USER_AGENT = `coldrouter/${VERSION}`;

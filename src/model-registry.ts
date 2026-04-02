@@ -1,7 +1,7 @@
 /**
  * Model Registry - Custom Provider Configuration
  *
- * Loads custom model/provider configs from ~/.openclaw/clawrouter/models.json
+ * Loads custom model/provider configs from ~/.openclaw/coldrouter/models.json
  * and merges with built-in models. Supports hot reload via file watcher.
  */
 
@@ -16,7 +16,7 @@ import type {
 } from "./types";
 import type { ModelDefinitionConfig } from "./types";
 
-const MODELS_CONFIG_FILE = join(homedir(), ".openclaw", "clawrouter", "models.json");
+const MODELS_CONFIG_FILE = join(homedir(), ".openclaw", "coldrouter", "models.json");
 
 let cachedConfig: ModelRegistryConfig | null = null;
 let fileWatcher: ReturnType<typeof watchFile> | null = null;

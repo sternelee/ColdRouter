@@ -1,7 +1,7 @@
 /**
- * ClawRouter ProviderPlugin for OpenClaw
+ * ColdRouter ProviderPlugin for OpenClaw
  *
- * Registers ClawRouter as an LLM provider in OpenClaw.
+ * Registers ColdRouter as an LLM provider in OpenClaw.
  * Uses a local proxy to handle smart routing to provider APIs.
  */
 
@@ -20,11 +20,11 @@ export function getActiveProxy(): ProxyHandle | null {
   return activeProxy;
 }
 
-export const clawrouterProvider: ProviderPlugin = {
-  id: "clawrouter",
-  label: "ClawRouter",
-  docsPath: "https://github.com/user/ClawRouter",
-  aliases: ["cr"],
+export const coldrouterProvider: ProviderPlugin = {
+  id: "coldrouter",
+  label: "ColdRouter",
+  docsPath: "https://github.com/user/ColdRouter",
+  aliases: ["cold"],
   envVars: [],
 
   get models() {

@@ -1,13 +1,13 @@
 /**
- * ClawRouter — Smart LLM Router (Direct API Keys)
+ * ColdRouter — Smart LLM Router (Direct API Keys)
  *
  * Routes each request to the cheapest model that can handle it,
  * using your own provider API keys. No crypto, no middleman.
  *
  * Usage:
- *   openclaw plugins install ./ClawRouter
- *   # Configure API keys via env vars or ~/.openclaw/clawrouter/configon
- *   openclaw models set clawrouter/auto
+ *   openclaw plugins install ./ColdRouter
+ *   # Configure API keys via env vars or ~/.openclaw/coldrouter/config
+ *   openclaw models set coldrouter/auto
  */
 
 import type {
@@ -16,7 +16,7 @@ import type {
   PluginCommandContext,
   OpenClawPluginCommandDefinition,
 } from "./types";
-import { clawrouterProvider, setActiveProxy } from "./provider";
+import { coldrouterProvider, setActiveProxy } from "./provider";
 import { startProxy, getProxyPort } from "./proxy";
 import {
   loadApiKeys,
@@ -98,8 +98,8 @@ function injectModelsConfig(logger: { info: (msg: string) => void }): void {
   const expectedBaseUrl = `http://127.0.0.1:${proxyPort}/v1`;
   const providers = models.providers as Record<string, unknown>;
 
-  if (!providers.clawrouter) {
-    providers.clawrouter = {
+  if (!providers.coldrouter) {
+    providers.coldrouter = {
       baseUrl: expectedBaseUrl,
       api: "openai-completions",
       apiKey: "local-proxy",
@@ -107,7 +107,7 @@ function injectModelsConfig(logger: { info: (msg: string) => void }): void {
     };
     needsWrite = true;
   } else {
-    const cr = providers.clawrouter as Record<string, unknown>;
+    const cr = providers.coldrouter as Record<string, unknown>;
     let fixed = false;
     if (!cr.baseUrl || cr.baseUrl !== expectedBaseUrl) {
       cr.baseUrl = expectedBaseUrl;
@@ -150,7 +150,7 @@ function injectModelsConfig(logger: { info: (msg: string) => void }): void {
   }
   const model = defaults.model as Record<string, unknown>;
   if (!model.primary) {
-    model.primary = "clawrouter/auto";
+    model.primary = "coldrouter/auto";
     needsWrite = true;
   }
 
@@ -174,7 +174,7 @@ function injectModelsConfig(logger: { info: (msg: string) => void }): void {
   }
   const allowlist = defaults.models as Record<string, unknown>;
   for (const m of KEY_ALIASES) {
-    const fullId = `clawrouter/${m.id}`;
+    const fullId = `coldrouter/${m.id}`;
     if (!allowlist[fullId]) {
       allowlist[fullId] = { alias: m.alias };
       needsWrite = true;
@@ -215,8 +215,8 @@ async function startProxyInBackground(
   const proxy = await startProxy({
     apiKeys,
     routingConfig,
-    onReady: (port) => api.logger.info(`ClawRouter proxy listening on port ${port}`),
-    onError: (error) => api.logger.error(`ClawRouter proxy error: ${error.message}`),
+    onReady: (port) => api.logger.info(`ColdRouter proxy listening on port ${port}`),
+    onError: (error) => api.logger.error(`ColdRouter proxy error: ${error.message}`),
     onRouted: (decision) => {
       const cost = decision.costEstimate.toFixed(4);
       const saved = (decision.savings * 100).toFixed(0);
@@ -229,7 +229,7 @@ async function startProxyInBackground(
   setActiveProxy(proxy);
   activeProxyHandle = proxy;
   api.logger.info(
-    `ClawRouter ready — ${accessibleProviders.length} providers accessible, smart routing enabled`,
+    `ColdRouter ready — ${accessibleProviders.length} providers accessible, smart routing enabled`,
   );
 
   // Pre-load OpenRouter model catalog for ID resolution
@@ -244,7 +244,7 @@ async function startProxyInBackground(
 async function createStatsCommand(): Promise<OpenClawPluginCommandDefinition> {
   return {
     name: "stats",
-    description: "Show ClawRouter usage statistics and cost savings",
+    description: "Show ColdRouter usage statistics and cost savings",
     acceptsArgs: true,
     requireAuth: false,
     handler: async (ctx: PluginCommandContext) => {
@@ -273,7 +273,7 @@ async function createKeysCommand(apiKeys: ApiKeysConfig): Promise<OpenClawPlugin
       if (providers.length === 0) {
         return {
           text: [
-            "🔑 **ClawRouter API Keys**",
+            "🔑 **ColdRouter API Keys**",
             "",
             "No API keys configured!",
             "",
@@ -287,7 +287,7 @@ async function createKeysCommand(apiKeys: ApiKeysConfig): Promise<OpenClawPlugin
             "• `XAI_API_KEY=xai-...`",
             "• `DEEPSEEK_API_KEY=sk-...`",
             "",
-            "**Or edit:** `~/.openclaw/clawrouter/configon`",
+            "**Or edit:** `~/.openclaw/coldrouter/configon`",
           ].join("\n"),
         };
       }
@@ -295,7 +295,7 @@ async function createKeysCommand(apiKeys: ApiKeysConfig): Promise<OpenClawPlugin
       const orActive = hasOpenRouter(apiKeys);
       const accessible = getAccessibleProviders(apiKeys);
       const lines = [
-        "🔑 **ClawRouter API Keys**",
+        "🔑 **ColdRouter API Keys**",
         "",
         ...providers.map((p) => {
           const key = apiKeys.providers[p]?.apiKey || "";
@@ -315,35 +315,35 @@ async function createKeysCommand(apiKeys: ApiKeysConfig): Promise<OpenClawPlugin
 }
 
 const plugin: OpenClawPluginDefinition = {
-  id: "clawrouter",
-  name: "ClawRouter",
+  id: "coldrouter",
+  name: "ColdRouter",
   description: "Smart LLM router — your keys, smart routing, maximum savings",
   version: VERSION,
 
   register(api: OpenClawPluginApi) {
     const isDisabled =
-      process.env.CLAWROUTER_DISABLED === "true" || process.env.CLAWROUTER_DISABLED === "1";
+      process.env.COLDROUTER_DISABLED === "true" || process.env.COLDROUTER_DISABLED === "1";
     if (isDisabled) {
-      api.logger.info("ClawRouter disabled (CLAWROUTER_DISABLED=true)");
+      api.logger.info("ColdRouter disabled (COLDROUTER_DISABLED=true)");
       return;
     }
 
     if (isCompletionMode()) {
-      api.registerProvider(clawrouterProvider);
+      api.registerProvider(coldrouterProvider);
       return;
     }
 
     // Load API keys
     const apiKeys = loadApiKeys(api.pluginConfig);
 
-    api.registerProvider(clawrouterProvider);
+    api.registerProvider(coldrouterProvider);
     injectModelsConfig(api.logger);
 
     // Runtime config
     const runtimePort = getProxyPort();
     if (!api.config.models) api.config.models = { providers: {} };
     if (!api.config.models.providers) api.config.models.providers = {};
-    api.config.models.providers.clawrouter = {
+    api.config.models.providers.coldrouter = {
       baseUrl: `http://127.0.0.1:${runtimePort}/v1`,
       api: "openai-completions",
       apiKey: "local-proxy",
@@ -356,11 +356,11 @@ const plugin: OpenClawPluginDefinition = {
     const defaults = agents.defaults as Record<string, unknown>;
     if (!defaults.model) defaults.model = {};
     const model = defaults.model as Record<string, unknown>;
-    if (!model.primary) model.primary = "clawrouter/auto";
+    if (!model.primary) model.primary = "coldrouter/auto";
 
     const configuredProviders = getConfiguredProviders(apiKeys);
     api.logger.info(
-      `ClawRouter registered (${configuredProviders.length} providers: ${configuredProviders.join(", ") || "none"})`,
+      `ColdRouter registered (${configuredProviders.length} providers: ${configuredProviders.join(", ") || "none"})`,
     );
 
     // Register commands
@@ -373,7 +373,7 @@ const plugin: OpenClawPluginDefinition = {
 
     // Register service for cleanup
     api.registerService({
-      id: "clawrouter-proxy",
+      id: "coldrouter-proxy",
       start: () => {},
       stop: async () => {
         if (activeProxyHandle) {
@@ -411,7 +411,7 @@ export default plugin;
 // Re-exports
 export { startProxy, getProxyPort } from "./proxy";
 export type { ProxyOptions, ProxyHandle } from "./proxy";
-export { clawrouterProvider } from "./provider";
+export { coldrouterProvider } from "./provider";
 export {
   OPENCLAW_MODELS,
   BLOCKRUN_MODELS,

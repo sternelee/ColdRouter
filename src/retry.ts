@@ -1,5 +1,5 @@
 /**
- * Retry Logic for ClawRouter
+ * Retry Logic for ColdRouter
  *
  * Provides fetch wrapper with exponential backoff for transient errors.
  * Retries on 429 (rate limit), 502, 503, 504 (server errors).

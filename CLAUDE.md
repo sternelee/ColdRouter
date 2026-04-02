@@ -24,12 +24,12 @@ bun test/test-retry.ts
 
 ## Architecture Overview
 
-ClawRouter is a smart LLM router plugin that routes requests to the cheapest capable model using your own API keys.
+ColdRouter is a smart LLM router plugin that routes requests to the cheapest capable model using your own API keys.
 
 ### Core Flow
 
 ```
-Client → ClawRouter Proxy (localhost) → Provider API (OpenAI/Anthropic/Google/etc.)
+Client → ColdRouter Proxy (localhost) → Provider API (OpenAI/Anthropic/Google/etc.)
                     ↓
             ┌────── Router ──────┐
             │ 15-dim classifier  │ → determines tier (SIMPLE/MEDIUM/COMPLEX/REASONING)
@@ -63,11 +63,11 @@ Direct provider key (`OPENAI_API_KEY`) > OpenRouter fallback (`OPENROUTER_API_KE
 
 ```typescript
 const plugin: OpenClawPluginDefinition = {
-  id: "clawrouter",
+  id: "coldrouter",
   register(api: OpenClawPluginApi) {
-    api.registerProvider(clawrouterProvider);
+    api.registerProvider(coldrouterProvider);
     api.registerCommand({ name: "stats", handler: async () => ({ text: "..." }) });
-    api.registerService({ id: "clawrouter-proxy", start: () => {}, stop: async () => {} });
+    api.registerService({ id: "coldrouter-proxy", start: () => {}, stop: async () => {} });
   },
 };
 ```
