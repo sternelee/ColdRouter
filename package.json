@@ -24,8 +24,8 @@
     "openclaw.plugin.json"
   ],
   "scripts": {
-    "build": "tsup",
-    "dev": "tsup --watch",
+    "build": "bun build --target=browser --outdir=dist --splitting --sourcemap src/index.ts",
+    "dev": "bun run src/index.ts",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [
@@ -50,6 +50,8 @@
     }
   },
   "devDependencies": {
+    "@types/node": "latest",
+    "bun-types": "latest",
     "openclaw": "latest",
     "tsup": "^8.0.0",
     "typescript": "^5.7.0"
