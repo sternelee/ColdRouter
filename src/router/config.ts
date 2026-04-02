@@ -7,7 +7,7 @@
  * Scoring uses 14 weighted dimensions with sigmoid confidence calibration.
  */
 
-import type { RoutingConfig } from "./types.js";
+import type { RoutingConfig } from "./types";
 
 export const DEFAULT_ROUTING_CONFIG: RoutingConfig = {
   version: "2.0",

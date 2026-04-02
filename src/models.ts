@@ -493,12 +493,16 @@ export const OPENCLAW_MODELS: ModelDefinitionConfig[] = [
  * Build a ModelProviderConfig for BlockRun.
  *
  * @param baseUrl - The proxy's local base URL (e.g., "http://127.0.0.1:12345")
+ * @param customModels - Optional array of custom model definitions to merge
  */
-export function buildProviderModels(baseUrl: string): ModelProviderConfig {
+export function buildProviderModels(
+  baseUrl: string,
+  customModels?: ModelDefinitionConfig[],
+): ModelProviderConfig {
   return {
     baseUrl: `${baseUrl}/v1`,
     api: "openai-completions",
-    models: OPENCLAW_MODELS,
+    models: [...OPENCLAW_MODELS, ...(customModels ?? [])],
   };
 }
 

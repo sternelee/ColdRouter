@@ -4,80 +4,68 @@
 
 ClawRouter is a smart LLM router that routes requests to the cheapest capable model using your own API keys. It's an OpenClaw plugin written in TypeScript with ESM modules.
 
-## Build / Lint / Test Commands
+## Build / Dev / Type Check
 
-### Build
 ```bash
-npm run build        # Build with tsup (outputs to dist/)
-npm run dev          # Watch mode for development
+bun run build        # Build src/index.ts + src/cli.ts → dist/
+bun run dev          # Run CLI in watch mode (bun run src/cli.ts)
+bun run typecheck    # TypeScript type check (no emit)
 ```
 
-### Type Checking
+## Lint
+
 ```bash
-npm run typecheck    # TypeScript type checking (no emit)
+npx eslint src/        # Lint source files
+npx eslint src/ --fix  # Auto-fix
 ```
 
-### Linting
+ESLint uses `typescript-eslint` recommended config, ignores `dist/`, `node_modules/`, `test/`.
+
+## Running Tests
+
+Tests are in `test/` directory. They use simple assertion helpers (no test framework).
+
+**Run a single test:**
 ```bash
-npx eslint src/      # Lint source files
-npx eslint src/ --fix  # Auto-fix linting issues
-```
+# Using bun (recommended)
+bun test/test-retry.ts
 
-### Running Tests
-
-Tests are TypeScript files in `test/` directory. They use native Node.js test patterns with simple assertion helpers (no test framework).
-
-**Run a single test file:**
-```bash
-# Compile and run with node
+# Or compile then run
 npx tsup test/e2e.ts --format esm --outDir test/dist --no-dts && node test/dist/e2e.js
-
-# Or using tsx (if installed)
-npx tsx test/test-retry.ts
 ```
 
 **Run all tests:**
 ```bash
-# Shell scripts in test/
-bash test/run-docker-test.sh
-
-# E2E tests
-node test/test-e2e.mjs
+bash test/run-docker-test.sh   # Docker-based tests
+node test/test-e2e.mjs         # E2E tests
 ```
 
-**Note:** Tests require API keys for live tests. Set environment variables:
+Tests require API keys for live testing:
 - `OPENROUTER_API_KEY` - OpenRouter fallback key
 - `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, etc. - Direct provider keys
 
 ---
 
-## Code Style Guidelines
+## Code Style
 
-### TypeScript Configuration
-- **Strict mode enabled** (`"strict": true` in tsconfig.json)
-- **ESM modules** (`"type": "module"` in package.json)
-- Use `.js` extensions in imports even for local files (required for ESM)
+### TypeScript & Module Config
+- **Strict mode**: `"strict": true` in tsconfig.json
+- **ESM modules**: `"type": "module"` in package.json
+- **Target**: ES2022, Node.js 20+
 
 ### Imports
-- Use `import type` for type-only imports to improve build performance
+- Use `import type` for type-only imports
 - Order: external packages → internal modules → local files
-- Use named exports over default exports where reasonable
-- Always use explicit extension in local imports: `./router/index.js`
+- Named exports preferred over default exports
+- **Always use `.js` extension for local imports** (ESM requirement)
 
-**Good:**
 ```typescript
 import type { RoutingDecision, Tier } from "./types.js";
 import { route } from "./router/index.js";
 import { readFileSync } from "node:fs";
 ```
 
-**Bad:**
-```typescript
-import { route, type RoutingDecision } from "./router";  // missing .js
-import RoutingDecision from "./types";  // default export
-```
-
-### Naming Conventions
+### Naming
 | Element | Convention | Example |
 |---------|------------|---------|
 | Types/Interfaces | PascalCase | `RoutingDecision`, `ApiKeysConfig` |
@@ -86,12 +74,11 @@ import RoutingDecision from "./types";  // default export
 | Files | kebab-case | `api-keys.ts`, `openrouter-models.ts` |
 | Enums | PascalCase members | `Tier.SIMPLE`, `Tier.MEDIUM` |
 
-### Type Definitions
-- Use `type` for simple type aliases; use `interface` when extension may be needed
-- Always export types that are part of public API
-- Use `Record<string, T>` instead of `{ [key: string]: T }` for object types
+### Types
+- Use `type` for aliases; `interface` when extension needed
+- Always export public API types
+- Prefer `Record<string, T>` over `{ [key: string]: T }`
 
-**Good:**
 ```typescript
 export type Tier = "SIMPLE" | "MEDIUM" | "COMPLEX" | "REASONING";
 export interface RoutingDecision {
@@ -102,78 +89,15 @@ export interface RoutingDecision {
 ```
 
 ### Error Handling
-- Use specific error types when possible
-- Always handle promise rejections (avoid unhandled rejections)
-- For optional operations, use try/catch with meaningful error messages
-- Use `instanceof Error` checks before accessing `error.message`
-
-**Good:**
-```typescript
-try {
-  const data = readFileSync(path, "utf-8");
-} catch (err) {
-  if (err instanceof Error) {
-    logger.error(`Failed to read file: ${err.message}`);
-  }
-  return undefined;
-}
-```
-
-**Bad:**
-```typescript
-try {
-  const data = readFileSync(path, "utf-8");
-} catch {  // silent catch - avoids eslint/no-empty
-  return undefined;
-}
-```
-
-### Async/Await
-- Always use `async/await` over raw promises
-- Handle async errors with try/catch
-- Don't leave promises floating (ensure they're awaited or returned)
-
-### JSDoc Comments
-- Use JSDoc for public APIs and exported functions
-- Keep comments concise; don't restate what the type signature already tells you
-- Include `@example` blocks for complex utility functions
-
-**Good:**
-```typescript
-/**
- * Route a request to the cheapest capable model.
- * @param prompt - The user prompt
- * @param systemPrompt - Optional system prompt
- * @param maxOutputTokens - Maximum output tokens
- * @returns RoutingDecision with model selection and cost estimates
- */
-export function route(prompt: string, systemPrompt: string | undefined, maxOutputTokens: number, options: RouterOptions): RoutingDecision
-```
+- Always handle promise rejections
+- Use `instanceof Error` checks before accessing `.message`
+- Provide meaningful error messages in catch blocks
 
 ### Formatting (Prettier)
-- **Semicolons:** required
-- **Single quotes:** disabled (use double quotes)
-- **Trailing commas:** all
-- **Print width:** 100 characters
-- **Tab width:** 2 spaces
-
-```json
-{
-  "semi": true,
-  "singleQuote": false,
-  "trailingComma": "all",
-  "printWidth": 100,
-  "tabWidth": 2
-}
-```
-
-### ESLint Rules
-- Extends `typescript-eslint` recommended config
-- Warnings/errors for:
-  - No implicit any (`@typescript-eslint/no-explicit-any`)
-  - Consistent async/await
-  - Properly typed function signatures
-- Ignores: `dist/`, `node_modules/`, `test/`
+- Semicolons: required
+- Quotes: double quotes
+- Trailing commas: all
+- Print width: 100, Tab width: 2
 
 ---
 
@@ -181,32 +105,26 @@ export function route(prompt: string, systemPrompt: string | undefined, maxOutpu
 
 ```
 src/
-├── index.ts          # Plugin entry point, exports
-├── api-keys.ts       # API key configuration management
-├── cli.ts            # CLI implementation
-├── dedup.ts          # Request deduplication
-├── logger.ts         # Usage logging
-├── models.ts         # Model definitions and pricing
+├── index.ts              # Plugin entry, exports
+├── cli.ts                # CLI implementation
+├── types.ts              # TypeScript definitions
+├── api-keys.ts           # API key management
+├── models.ts             # Model definitions & pricing
 ├── openrouter-models.ts  # OpenRouter model catalog
-├── proxy.ts          # Local proxy server
-├── provider.ts       # OpenClaw provider definition
-├── retry.ts          # Retry logic with exponential backoff
-├── session.ts        # Session pinning
-├── stats.ts          # Usage statistics
-├── types.ts          # TypeScript type definitions
-├── version.ts        # Version info
+├── proxy.ts              # Local proxy server
+├── provider.ts           # OpenClaw provider definition
+├── retry.ts              # Retry with exponential backoff
+├── dedup.ts              # Request deduplication
+├── session.ts            # Session pinning
+├── stats.ts              # Usage statistics
+├── logger.ts             # Usage logging
+├── version.ts            # Version info
 └── router/
-    ├── index.ts      # Main routing logic
-    ├── config.ts     # Routing configuration
-    ├── llm-classifier.ts  # LLM-based fallback classifier
-    ├── rules.ts      # Rule-based classifier (15 dimensions)
-    └── selector.ts   # Model selection for tier
-
-test/
-├── e2e.ts            # End-to-end tests
-├── test-retry.ts     # Retry logic unit tests
-├── types.ts          # Test type utilities
-└── *.ts              # Feature-specific tests
+    ├── index.ts          # Main routing logic
+    ├── config.ts         # Routing configuration
+    ├── rules.ts          # Rule-based classifier (15 dimensions)
+    ├── selector.ts       # Model selection for tier
+    └── llm-classifier.ts # LLM-based fallback classifier
 ```
 
 ---
@@ -227,23 +145,22 @@ const plugin: OpenClawPluginDefinition = {
 export default plugin;
 ```
 
-### Routing Decision Flow
+### Routing Flow
 1. Check overrides (large context, structured output)
 2. Run rule-based classifier (15 weighted dimensions, <1ms)
-3. If ambiguous, default to configurable tier (no external API calls)
+3. Ambiguous → default to configurable tier (no external API calls)
 4. Select model for tier from available providers
-5. Return `RoutingDecision` with model, cost estimates, and reasoning
+5. Return `RoutingDecision` with model, cost, reasoning
 
-### Provider Access Resolution
-Priority: Direct provider key > OpenRouter fallback (for OpenAI-compatible providers). Anthropic and Google always route through OpenRouter due to API incompatibilities.
+### Provider Access Priority
+Direct provider key > OpenRouter fallback (OpenAI-compatible). Anthropic/Google always route through OpenRouter.
 
 ---
 
-## Common Issues / Gotchas
+## Gotchas
 
-1. **ESM imports require `.js` extension** - Always use `./foo.js` not `./foo`
-2. **TypeScript strict mode** - All variables must be typed or have clear type inference
-3. **Async error handling** - Never leave async operations unhandled
-4. **OpenClaw plugin hooks** - Use `registerService` for cleanup on shutdown
-5. **Test file location** - Tests are in `test/` but ESLint ignores this directory
-6. **Peer dependency** - OpenClaw is a peer dependency (`>=2025.1.0`)
+1. **ESM requires `.js` in imports** — `./foo.js` not `./foo`
+2. **Strict mode** — all variables must be typed or have clear inference
+3. **Async errors** — never leave promises unhandled
+4. **Plugin cleanup** — use `registerService.stop` for shutdown hooks
+5. **Peer dependency** — OpenClaw `>=2025.1.0` (optional)

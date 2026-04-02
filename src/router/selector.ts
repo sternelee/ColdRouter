@@ -5,7 +5,8 @@
  * Builds RoutingDecision metadata with cost estimates and savings.
  */
 
-import type { Tier, TierConfig, RoutingDecision } from "./types.js";
+import type { Tier, TierConfig, RoutingDecision } from "./types";
+import { getCustomModel } from "../model-registry";
 
 export type ModelPricing = {
   inputPrice: number; // per 1M tokens
@@ -24,9 +25,24 @@ export function selectModel(
   modelPricing: Map<string, ModelPricing>,
   estimatedInputTokens: number,
   maxOutputTokens: number,
+  allowedModels?: string[],
 ): RoutingDecision {
   const tierConfig = tierConfigs[tier];
-  const model = tierConfig.primary;
+
+  // Filter chain by allowed models and tier capability
+  const chain = getFallbackChain(tier, tierConfigs);
+  const filteredChain = chain.filter((modelId) => {
+    if (allowedModels && !allowedModels.includes(modelId)) {
+      return false;
+    }
+    const customModel = getCustomModel(modelId);
+    if (customModel && !customModel.tiers.includes(tier)) {
+      return false;
+    }
+    return true;
+  });
+
+  const model = filteredChain[0] ?? chain[0];
   const pricing = modelPricing.get(model);
 
   const inputCost = pricing ? (estimatedInputTokens / 1_000_000) * pricing.inputPrice : 0;

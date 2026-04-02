@@ -9,7 +9,7 @@
  * Only triggered for ~20-30% of requests.
  */
 
-import type { Tier } from "./types.js";
+import type { Tier } from "./types";
 
 const CLASSIFIER_PROMPT = `You are a query complexity classifier. Classify the user's query into exactly one category.
 

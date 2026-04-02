@@ -457,3 +457,77 @@ npx tsx test/proxy-reuse.ts
 # Full e2e with payments (requires funded wallet)
 BLOCKRUN_WALLET_KEY=0x... npx tsx test/e2e.ts
 ```
+
+---
+
+## Custom Model Providers
+
+You can add your own LLM providers and models by creating a configuration file at `~/.openclaw/clawrouter/models.json`.
+
+### Example Configuration
+
+```json
+{
+  "version": "1.0",
+  "providers": {
+    "my-provider": {
+      "name": "My Custom Provider",
+      "baseUrl": "https://api.my-provider.com/v1",
+      "apiKey": "sk-xxx",
+      "apiFormat": "openai-completions"
+    }
+  },
+  "models": {
+    "my-provider/custom-model": {
+      "name": "Custom Model",
+      "provider": "my-provider",
+      "capabilities": {
+        "vision": false,
+        "reasoning": true,
+        "code": true,
+        "creative": false,
+        "agentic": false
+      },
+      "tiers": ["SIMPLE", "MEDIUM", "COMPLEX"],
+      "pricing": {
+        "input": 0.5,
+        "output": 1.5
+      },
+      "limits": {
+        "contextWindow": 128000,
+        "maxOutput": 16384
+      },
+      "useCases": ["coding", "analysis"],
+      "enabled": true
+    }
+  }
+}
+```
+
+### Configuration Fields
+
+#### Provider Fields
+- `name`: Display name for the provider
+- `baseUrl`: API endpoint base URL
+- `apiKey`: Your API key (can also use environment variable)
+- `apiFormat`: One of `openai-completions`, `anthropic-messages`, `google-generative-ai`
+- `headers`: Optional custom headers
+
+#### Model Fields
+- `name`: Display name for the model
+- `provider`: Reference to provider defined above
+- `capabilities`: Boolean flags for model capabilities
+  - `vision`: Supports image input
+  - `reasoning`: Has explicit reasoning/thinking capabilities
+  - `code`: Optimized for code generation
+  - `creative`: Good for creative writing
+  - `agentic`: Supports autonomous multi-step tasks
+- `tiers`: Which routing tiers this model can handle
+- `pricing`: Cost per million tokens (input/output)
+- `limits`: Context window and max output tokens
+- `useCases`: Array of use case tags for future routing rules
+- `enabled`: Set to `false` to disable without removing
+
+### Hot Reload
+
+Changes to `models.json` are applied automatically without restarting OpenClaw.

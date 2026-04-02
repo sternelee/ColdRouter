@@ -6,9 +6,10 @@
  * Ambiguous cases default to configurable tier (MEDIUM by default).
  */
 
-import type { Tier, RoutingDecision, RoutingConfig } from "./types.js";
-import { classifyByRules } from "./rules.js";
-import { selectModel, type ModelPricing } from "./selector.js";
+import type { Tier, RoutingDecision, RoutingConfig } from "./types";
+import { classifyByRules } from "./rules";
+import { selectModel, type ModelPricing } from "./selector";
+import { getCustomModels } from "../model-registry";
 
 export type RouterOptions = {
   config: RoutingConfig;
@@ -55,6 +56,8 @@ export function route(
   // --- Override: large context → force COMPLEX ---
   // Uses user-only tokens — system prompt tool definitions shouldn't force COMPLEX
   if (estimatedUserTokens > config.overrides.maxTokensForceComplex) {
+    const customModels = getCustomModels();
+    const allowedModels = customModels.filter((m) => m.tiers.includes("COMPLEX")).map((m) => m.id);
     return selectModel(
       "COMPLEX",
       0.95,
@@ -64,6 +67,7 @@ export function route(
       modelPricing,
       estimatedTokens,
       maxOutputTokens,
+      allowedModels,
     );
   }
 
@@ -102,6 +106,10 @@ export function route(
     reasoning += " | agentic";
   }
 
+  // Collect models that support this tier
+  const customModels = getCustomModels();
+  const allowedModels = customModels.filter((m) => m.tiers.includes(tier)).map((m) => m.id);
+
   return selectModel(
     tier,
     confidence,
@@ -111,10 +119,11 @@ export function route(
     modelPricing,
     estimatedTokens,
     maxOutputTokens,
+    allowedModels,
   );
 }
 
-export { getFallbackChain, getFallbackChainFiltered } from "./selector.js";
-export { DEFAULT_ROUTING_CONFIG } from "./config.js";
-export type { RoutingDecision, Tier, RoutingConfig } from "./types.js";
-export type { ModelPricing } from "./selector.js";
+export { getFallbackChain, getFallbackChainFiltered } from "./selector";
+export { DEFAULT_ROUTING_CONFIG } from "./config";
+export type { RoutingDecision, Tier, RoutingConfig } from "./types";
+export type { ModelPricing } from "./selector";

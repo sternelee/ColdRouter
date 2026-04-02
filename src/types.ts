@@ -161,3 +161,35 @@ export type OpenClawPluginCommandDefinition = {
   requireAuth?: boolean;
   handler: PluginCommandHandler;
 };
+
+// ─── Custom Model Provider Types ─────────────────────────────────────────────
+
+export type Tier = "SIMPLE" | "MEDIUM" | "COMPLEX" | "REASONING";
+
+export type ModelCapability = "vision" | "reasoning" | "code" | "creative" | "agentic";
+
+export type ModelDefinitionCustom = {
+  id: string;
+  name: string;
+  provider: string;
+  capabilities: Record<ModelCapability, boolean>;
+  tiers: Tier[];
+  pricing: { input: number; output: number; cacheRead?: number; cacheWrite?: number };
+  limits: { contextWindow: number; maxOutput: number };
+  useCases: string[];
+  enabled: boolean;
+};
+
+export type ProviderConfigCustom = {
+  name: string;
+  baseUrl: string;
+  apiKey?: string;
+  apiFormat: "openai-completions" | "anthropic-messages" | "google-generative-ai";
+  headers?: Record<string, string>;
+};
+
+export type ModelRegistryConfig = {
+  version: string;
+  providers: Record<string, ProviderConfigCustom>;
+  models: Record<string, Partial<ModelDefinitionCustom>>;
+};

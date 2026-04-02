@@ -8,9 +8,11 @@
  * Handles 70-80% of requests in < 1ms with zero cost.
  */
 
-import type { Tier, ScoringResult, ScoringConfig } from "./types.js";
+import type { Tier, ScoringResult, ScoringConfig } from "./types";
 
 type DimensionScore = { name: string; score: number; signal: string | null };
+
+import { getCustomModels } from "../model-registry";
 
 // ─── Dimension Scorers ───
 // Each returns a score in [-1, 1] and an optional signal string.
@@ -132,6 +134,46 @@ function scoreAgenticTask(
   };
 }
 
+function scoreCapabilities(prompt: string): {
+  dimensionScore: DimensionScore;
+  capabilityScore: number;
+} {
+  const promptLower = prompt.toLowerCase();
+  let codeScore = 0;
+  let creativeScore = 0;
+
+  const customModels = getCustomModels();
+  const codeModels = customModels.filter((m) => m.capabilities.code);
+  const creativeModels = customModels.filter((m) => m.capabilities.creative);
+
+  const codeKeywords = ["code", "function", "class", "implement", "debug", "api"];
+  const creativeKeywords = ["story", "poem", "creative", "write", "compose"];
+
+  const codeMatches = codeKeywords.filter((kw) => promptLower.includes(kw));
+  const creativeMatches = creativeKeywords.filter((kw) => promptLower.includes(kw));
+
+  if (codeMatches.length > 0 && codeModels.length > 0) {
+    codeScore = Math.min(codeMatches.length * 0.3, 1.0);
+  }
+  if (creativeMatches.length > 0 && creativeModels.length > 0) {
+    creativeScore = Math.min(creativeMatches.length * 0.3, 1.0);
+  }
+
+  const capabilityScore = Math.max(codeScore, creativeScore);
+
+  return {
+    dimensionScore: {
+      name: "customCapabilities",
+      score: capabilityScore,
+      signal:
+        capabilityScore > 0
+          ? `custom-capability(code=${codeScore.toFixed(1)}, creative=${creativeScore.toFixed(1)})`
+          : null,
+    },
+    capabilityScore,
+  };
+}
+
 // ─── Main Classifier ───
 
 export function classifyByRules(
@@ -246,6 +288,10 @@ export function classifyByRules(
   const agenticResult = scoreAgenticTask(userText, config.agenticTaskKeywords);
   dimensions.push(agenticResult.dimensionScore);
   const agenticScore = agenticResult.agenticScore;
+
+  // Score custom capability match (code, creative)
+  const capabilityResult = scoreCapabilities(prompt);
+  dimensions.push(capabilityResult.dimensionScore);
 
   // Collect signals
   const signals = dimensions.filter((d) => d.signal !== null).map((d) => d.signal!);
