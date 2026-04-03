@@ -6,7 +6,7 @@
  *
  * Usage:
  *   openclaw plugins install ./ColdRouter
- *   # Configure API keys via env vars or ~/.openclaw/coldrouter/config
+ *   # Configure API keys via env vars or ~/.coldrouter/config.json
  *   openclaw models set coldrouter/auto
  */
 
@@ -58,7 +58,7 @@ function isGatewayMode(): boolean {
 
 function injectModelsConfig(logger: { info: (msg: string) => void }): void {
   const configDir = join(homedir(), ".openclaw");
-  const configPath = join(configDir, "openclawon");
+  const configPath = join(configDir, "openclaw.json");
 
   let config: Record<string, unknown> = {};
   let needsWrite = false;
@@ -287,7 +287,7 @@ async function createKeysCommand(apiKeys: ApiKeysConfig): Promise<OpenClawPlugin
             "• `XAI_API_KEY=xai-...`",
             "• `DEEPSEEK_API_KEY=sk-...`",
             "",
-            "**Or edit:** `~/.openclaw/coldrouter/configon`",
+            "**Or edit:** `~/.coldrouter/config.json`",
           ].join("\n"),
         };
       }

@@ -86,7 +86,7 @@ async function main(): Promise<void> {
       "[ColdRouter] Quickest: export OPENROUTER_API_KEY=sk-or-...  (one key → all models)",
     );
     console.error("[ColdRouter] Or set individual keys: OPENAI_API_KEY, ANTHROPIC_API_KEY, etc.");
-    console.error("[ColdRouter] Or edit ~/.openclaw/coldrouter/configon");
+    console.error("[ColdRouter] Or edit ~/.coldrouter/config.json");
     process.exit(1);
   }
 

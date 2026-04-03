@@ -10,7 +10,11 @@ import { join } from "bun:path";
 import { homedir } from "bun:os";
 import type { UsageEntry } from "./logger";
 
-const LOG_DIR = join(homedir(), ".openclaw", "coldrouter", "logs");
+const LOG_DIR = join(homedir(), ".coldrouter", "logs");
+const LEGACY_LOG_DIRS = [
+  join(homedir(), ".openclaw", "coldrouter", "logs"),
+  join(homedir(), ".openclaw", "clawrouter", "logs"),
+];
 
 export type DailyStats = {
   date: string;
@@ -22,6 +26,8 @@ export type DailyStats = {
   byTier: Record<string, { count: number; cost: number }>;
   byModel: Record<string, { count: number; cost: number }>;
 };
+
+type LogFilesByDate = { date: string; files: string[] };
 
 export type AggregatedStats = {
   period: string;
@@ -64,18 +70,31 @@ async function parseLogFile(filePath: string): Promise<UsageEntry[]> {
 }
 
 /**
- * Get list of available log files sorted by date (newest first).
+ * Get list of available log files sorted by date (newest first), merging new + legacy dirs.
  */
-async function getLogFiles(): Promise<string[]> {
-  try {
-    const files = await readdir(LOG_DIR);
-    return files
-      .filter((f) => f.startsWith("usage-") && f.endsWith(".jsonl"))
-      .sort()
-      .reverse();
-  } catch {
-    return [];
+async function getLogFilesByDate(): Promise<LogFilesByDate[]> {
+  const dirs = [LOG_DIR, ...LEGACY_LOG_DIRS];
+  const byDate = new Map<string, string[]>();
+
+  for (const dir of dirs) {
+    try {
+      const files = await readdir(dir);
+      for (const file of files) {
+        if (!file.startsWith("usage-") || !file.endsWith(".jsonl")) continue;
+        const date = file.replace("usage-", "").replace(".jsonl", "");
+        const filePath = join(dir, file);
+        const bucket = byDate.get(date);
+        if (bucket) bucket.push(filePath);
+        else byDate.set(date, [filePath]);
+      }
+    } catch {
+      // ignore missing directory
+    }
   }
+
+  return [...byDate.entries()]
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .map(([date, files]) => ({ date, files }));
 }
 
 /**
@@ -119,8 +138,8 @@ function aggregateDay(date: string, entries: UsageEntry[]): DailyStats {
  * Get aggregated statistics for the last N days.
  */
 export async function getStats(days: number = 7): Promise<AggregatedStats> {
-  const logFiles = await getLogFiles();
-  const filesToRead = logFiles.slice(0, days);
+  const logFilesByDate = await getLogFilesByDate();
+  const datesToRead = logFilesByDate.slice(0, days);
 
   const dailyBreakdown: DailyStats[] = [];
   const allByTier: Record<string, { count: number; cost: number }> = {};
@@ -130,14 +149,16 @@ export async function getStats(days: number = 7): Promise<AggregatedStats> {
   let totalBaselineCost = 0;
   let totalLatency = 0;
 
-  for (const file of filesToRead) {
-    const date = file.replace("usage-", "").replace(".jsonl", "");
-    const filePath = join(LOG_DIR, file);
-    const entries = await parseLogFile(filePath);
+  for (const day of datesToRead) {
+    const allEntries: UsageEntry[] = [];
+    for (const filePath of day.files) {
+      const entries = await parseLogFile(filePath);
+      allEntries.push(...entries);
+    }
 
-    if (entries.length === 0) continue;
+    if (allEntries.length === 0) continue;
 
-    const dayStats = aggregateDay(date, entries);
+    const dayStats = aggregateDay(day.date, allEntries);
     dailyBreakdown.push(dayStats);
 
     totalRequests += dayStats.totalRequests;

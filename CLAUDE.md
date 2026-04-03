@@ -2,112 +2,90 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Quick Commands
+## Common Commands
 
 ```bash
-# Build
-bun run build        # Build src/index.ts + src/cli.ts → dist/
+# Install deps (CI uses npm)
+npm ci
 
-# Dev
-bun run dev          # Run CLI in watch mode (bun run src/cli.ts)
+# Build plugin + CLI to dist/
+bun run build
 
-# Type check
-bun run typecheck    # TypeScript type check (no emit)
+# Run standalone local proxy
+bun run dev
+# or
+npx coldrouter --port 8403
 
-# Lint
-npx eslint src/      # Lint source files
-npx eslint src/ --fix  # Auto-fix
+# Typecheck (project uses Bun build as typecheck gate)
+bun run typecheck
 
-# Run a single test
+# Lint (ESLint ignores dist/, node_modules/, test/)
+npx eslint src/
+npx eslint src/ --fix
+
+# Format check (matches CI)
+npx prettier --check .
+
+# Run a single test file
+npx tsx test/test-retry.ts
+# alternative used in repo docs
 bun test/test-retry.ts
 ```
 
-## Architecture Overview
+## Big-Picture Architecture
 
-ColdRouter is a smart LLM router plugin that routes requests to the cheapest capable model using your own API keys.
+ColdRouter is an OpenClaw plugin plus a local Bun proxy that exposes OpenAI-compatible endpoints and routes requests to the cheapest capable model using your own provider keys.
 
-### Core Flow
+### Runtime shape
 
-```
-Client → ColdRouter Proxy (localhost) → Provider API (OpenAI/Anthropic/Google/etc.)
-                    ↓
-            ┌────── Router ──────┐
-            │ 15-dim classifier  │ → determines tier (SIMPLE/MEDIUM/COMPLEX/REASONING)
-            │ (runs locally)     │
-            └────────────────────┘
-```
+1. Plugin registers provider + commands in `src/index.ts`.
+2. In gateway mode, plugin starts local proxy (`src/proxy.ts`) and injects `coldrouter` provider config into OpenClaw runtime config.
+3. Clients hit proxy endpoints (`/v1/chat/completions`, plus Claude-compatible endpoints).
+4. Router classifies request complexity, selects tier/model, then proxy forwards to provider API with fallback and stream normalization.
 
-### Key Components
+### Main subsystems
 
-- **`src/proxy.ts`**: Local HTTP proxy using Bun.serve, handles OpenAI-compatible `/v1/chat/completions` endpoints
-- **`src/router/index.ts`**: Main routing entry point — runs rule-based classifier, selects model
-- **`src/router/rules.ts`**: 15-dimension weighted scorer for request classification (<1ms, zero API cost)
-- **`src/router/selector.ts`**: Tier → model selection with fallback chains
-- **`src/api-keys.ts`**: API key management, provider priority (direct key > OpenRouter fallback)
-- **`src/model-registry.ts`**: Custom provider/model support (recently added)
+- **Plugin lifecycle + registration**: `src/index.ts`
+  - Registers provider, `/stats`, `/keys`, and shutdown service.
+  - Loads API keys from env/config/plugin config and starts proxy only in gateway mode.
+- **HTTP proxy + protocol normalization**: `src/proxy.ts`
+  - Bun server entrypoint.
+  - Handles health/stats and model listing endpoints.
+  - Bridges formats between OpenAI-style input and provider-specific APIs (notably Anthropic/Google handling, streaming/SSE shaping, tool ID sanitization, thinking-token stripping).
+  - Implements fallback attempts, rate-limit deprioritization, request deduplication, and session model pinning.
+- **Routing engine**: `src/router/index.ts`, `src/router/rules.ts`, `src/router/selector.ts`, `src/router/config.ts`
+  - Weighted rule-based classifier (15 dimensions) picks tier with confidence.
+  - Applies overrides (large context, structured-output minimum tier, ambiguous default tier).
+  - Chooses cheapest model in tier fallback chain with context-window filtering.
+  - Supports agentic tier set when agentic signals are strong.
+- **Provider/key access policy**: `src/api-keys.ts`
+  - Priority: direct provider key when possible; OpenRouter fallback otherwise.
+  - Anthropic/Google routes prefer OpenRouter path when available due to API-format differences.
+- **Model catalog + extensibility**: `src/models.ts`, `src/model-registry.ts`, `src/openrouter-models.ts`
+  - Built-in model pricing/aliases.
+  - Optional custom models/providers from `~/.coldrouter/models.json` with hot reload.
+  - OpenRouter model-id resolution cache.
 
-### Routing Tiers
+## Key Integration Details
 
-| Tier | Use Case | Default Model |
-|------|----------|---------------|
-| SIMPLE | Facts, translations | Gemini 2.5 Flash |
-| MEDIUM | Code, summaries | Grok Code Fast |
-| COMPLEX | System design | Gemini 2.5 Pro |
-| REASONING | Proofs, logic | Grok 4 Fast Reasoning |
+- **ESM import rule**: use `.js` extension for local imports.
+- **Config/keys locations**:
+  - `~/.coldrouter/config.json` (provider keys/base URLs)
+  - `~/.coldrouter/models.json` (custom models/providers)
+- **Useful proxy endpoints**:
+  - `GET /health`
+  - `GET /stats?days=N`
+  - `GET /v1/models`
+  - `GET /v1/claude/models`
+  - `POST /v1/chat/completions`
+  - `POST /v1/claude/completions`
+  - `POST /v1/anthropic`
 
-### Provider Priority
+## CI Expectations
 
-Direct provider key (`OPENAI_API_KEY`) > OpenRouter fallback (`OPENROUTER_API_KEY`). One OpenRouter key covers all 30+ models.
+From `.github/workflows/ci.yml`, PRs are expected to pass:
 
-### Plugin Registration Pattern
-
-```typescript
-const plugin: OpenClawPluginDefinition = {
-  id: "coldrouter",
-  register(api: OpenClawPluginApi) {
-    api.registerProvider(coldrouterProvider);
-    api.registerCommand({ name: "stats", handler: async () => ({ text: "..." }) });
-    api.registerService({ id: "coldrouter-proxy", start: () => {}, stop: async () => {} });
-  },
-};
-```
-
-## Key Patterns
-
-### ESM Imports
-
-Always use `.js` extension for local imports (ESM requirement):
-```typescript
-import { route } from "./router/index.js";
-```
-
-### Routing Flow
-
-1. Check overrides (large context → COMPLEX, structured output → min MEDIUM)
-2. Run rule-based classifier (15 weighted dimensions)
-3. Ambiguous → default to configurable tier (no external API calls)
-4. Select model for tier from available providers
-5. Return `RoutingDecision` with model, cost, reasoning
-
-### Provider Access
-
-- `getConfiguredProviders()` — keys actually configured
-- `getAccessibleProviders()` — keys with valid API access (includes OpenRouter fallback)
-- Models without accessible API key are automatically skipped from selection
-
-## Environment Variables
-
-| Variable | Provider |
-|----------|----------|
-| `OPENROUTER_API_KEY` | OpenRouter (covers all models) |
-| `OPENAI_API_KEY` | OpenAI |
-| `ANTHROPIC_API_KEY` | Anthropic |
-| `GOOGLE_API_KEY` | Google |
-| `XAI_API_KEY` | xAI (Grok) |
-| `DEEPSEEK_API_KEY` | DeepSeek |
-
-## Recent Changes
-
-- Migrated to Bun runtime with native APIs (commit 5e002ba)
-- Added model registry and custom provider support (commit eedae4a)
-- Migrated from node:http to Bun.serve() (commit 0c4e9ab)
+1. `npx prettier --check .`
+2. `npx eslint src/`
+3. `npm run typecheck`
+4. `npm run build`

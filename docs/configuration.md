@@ -462,7 +462,7 @@ BLOCKRUN_WALLET_KEY=0x... npx tsx test/e2e.ts
 
 ## Custom Model Providers
 
-You can add your own LLM providers and models by creating a configuration file at `~/.openclaw/clawrouter/models.json`.
+You can add your own LLM providers and models by creating a configuration file at `~/.coldrouter/models.json`.
 
 ### Example Configuration
 

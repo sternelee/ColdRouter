@@ -2,7 +2,7 @@
  * Usage Logger
  *
  * Logs every LLM request as a JSON line to a daily log file.
- * Files: ~/.openclaw/coldrouter/logs/usage-YYYY-MM-DD.jsonl
+ * Files: ~/.coldrouter/logs/usage-YYYY-MM-DD.jsonl
  *
  * MVP: append-only JSON lines. No rotation, no cleanup.
  * Logging never breaks the request flow — all errors are swallowed.
@@ -23,7 +23,7 @@ export type UsageEntry = {
   reasoning?: string; // Router classification reasoning (for debugging)
 };
 
-const LOG_DIR = join(homedir(), ".openclaw", "coldrouter", "logs");
+const LOG_DIR = join(homedir(), ".coldrouter", "logs");
 let dirReady = false;
 
 async function ensureDir(): Promise<void> {

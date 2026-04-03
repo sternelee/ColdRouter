@@ -1,7 +1,7 @@
 /**
  * Model Registry - Custom Provider Configuration
  *
- * Loads custom model/provider configs from ~/.openclaw/coldrouter/models.json
+ * Loads custom model/provider configs from ~/.coldrouter/models.json
  * and merges with built-in models. Supports hot reload via file watcher.
  */
 
@@ -16,20 +16,42 @@ import type {
 } from "./types";
 import type { ModelDefinitionConfig } from "./types";
 
-const MODELS_CONFIG_FILE = join(homedir(), ".openclaw", "coldrouter", "models.json");
+const MODELS_CONFIG_FILE = join(homedir(), ".coldrouter", "models.json");
+const LEGACY_MODELS_CONFIG_FILES = [
+  join(homedir(), ".openclaw", "coldrouter", "models.json"),
+  join(homedir(), ".openclaw", "clawrouter", "models.json"),
+];
 
 let cachedConfig: ModelRegistryConfig | null = null;
+let activeConfigFilePath: string = MODELS_CONFIG_FILE;
+let watchedConfigFilePath: string = MODELS_CONFIG_FILE;
 let fileWatcher: ReturnType<typeof watchFile> | null = null;
 type ReloadCallback = (config: ModelRegistryConfig) => void;
 const reloadCallbacks: ReloadCallback[] = [];
+
+function resolveModelsConfigFilePath(): string {
+  for (const path of [MODELS_CONFIG_FILE, ...LEGACY_MODELS_CONFIG_FILES]) {
+    try {
+      readFileSync(path, "utf-8");
+      return path;
+    } catch (err) {
+      if (!(err instanceof Error && "code" in err && err.code === "ENOENT")) {
+        return path;
+      }
+    }
+  }
+  return MODELS_CONFIG_FILE;
+}
 
 /**
  * Load and parse the models.json config file.
  * Returns null if file doesn't exist or is invalid.
  */
 export function loadModelRegistry(): ModelRegistryConfig | null {
+  const configFilePath = resolveModelsConfigFilePath();
+  activeConfigFilePath = configFilePath;
   try {
-    const content = readFileSync(MODELS_CONFIG_FILE, "utf-8").trim();
+    const content = readFileSync(configFilePath, "utf-8").trim();
     if (!content) return null;
 
     const config = JSON.parse(content) as ModelRegistryConfig;
@@ -194,9 +216,13 @@ export function hasCustomModels(): boolean {
  */
 export function setupHotReload(callback: ReloadCallback): void {
   reloadCallbacks.push(callback);
+  if (!cachedConfig) {
+    cachedConfig = loadModelRegistry();
+  }
 
   if (!fileWatcher) {
-    fileWatcher = watchFile(MODELS_CONFIG_FILE, () => {
+    watchedConfigFilePath = activeConfigFilePath;
+    fileWatcher = watchFile(watchedConfigFilePath, () => {
       cachedConfig = loadModelRegistry();
       for (const cb of reloadCallbacks) {
         if (cachedConfig) cb(cachedConfig);
@@ -210,7 +236,7 @@ export function setupHotReload(callback: ReloadCallback): void {
  */
 export function cleanupHotReload(): void {
   if (fileWatcher) {
-    unwatchFile(MODELS_CONFIG_FILE);
+    unwatchFile(watchedConfigFilePath);
     fileWatcher = null;
   }
   reloadCallbacks.length = 0;

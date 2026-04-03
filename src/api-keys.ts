@@ -4,7 +4,7 @@
  * Manages per-provider API keys for direct provider access.
  * Keys can be configured via:
  *   1. Environment variables (OPENAI_API_KEY, ANTHROPIC_API_KEY, etc.)
- *   2. Config file (~/.openclaw/coldrouter/config.json)
+ *   2. Config file (~/.coldrouter/config.json)
  *   3. Plugin config in openclaw.json
  */
 
@@ -12,8 +12,12 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from "bun:fs";
 import { join } from "bun:path";
 import { homedir } from "bun:os";
 
-const CONFIG_DIR = join(homedir(), ".openclaw", "coldrouter");
+const CONFIG_DIR = join(homedir(), ".coldrouter");
 const CONFIG_FILE = join(CONFIG_DIR, "config.json");
+const LEGACY_CONFIG_FILES = [
+  join(homedir(), ".openclaw", "coldrouter", "config.json"),
+  join(homedir(), ".openclaw", "clawrouter", "config.json"),
+];
 
 export { CONFIG_FILE };
 
@@ -62,10 +66,13 @@ export type ApiKeysConfig = {
 export function loadApiKeys(pluginConfig?: Record<string, unknown>): ApiKeysConfig {
   const config: ApiKeysConfig = { providers: {} };
 
-  // 1. Load from config file
-  if (existsSync(CONFIG_FILE)) {
+  // 1. Load from config file (new path first, then legacy fallback)
+  const configFileToRead = existsSync(CONFIG_FILE)
+    ? CONFIG_FILE
+    : LEGACY_CONFIG_FILES.find((path) => existsSync(path));
+  if (configFileToRead) {
     try {
-      const content = readFileSync(CONFIG_FILE, "utf-8").trim();
+      const content = readFileSync(configFileToRead, "utf-8").trim();
       if (content) {
         const parsed = JSON.parse(content) as Partial<ApiKeysConfig>;
         if (parsed.providers) {

@@ -3,17 +3,29 @@ import { writeFileSync, mkdirSync, rmSync } from "bun:fs";
 import { join } from "bun:path";
 import { homedir } from "bun:os";
 
-const TEST_CONFIG_DIR = join(homedir(), ".openclaw", "clawrouter");
+const TEST_CONFIG_DIR = join(homedir(), ".coldrouter");
 const TEST_CONFIG_FILE = join(TEST_CONFIG_DIR, "models.json");
+const LEGACY_TEST_CONFIG_DIR = join(homedir(), ".openclaw", "clawrouter");
+const LEGACY_TEST_CONFIG_FILE = join(LEGACY_TEST_CONFIG_DIR, "models.json");
 
 function createTestConfig(config: string): void {
   mkdirSync(TEST_CONFIG_DIR, { recursive: true });
   writeFileSync(TEST_CONFIG_FILE, config);
 }
 
+function createLegacyTestConfig(config: string): void {
+  mkdirSync(LEGACY_TEST_CONFIG_DIR, { recursive: true });
+  writeFileSync(LEGACY_TEST_CONFIG_FILE, config);
+}
+
 function cleanupTestConfig(): void {
   try {
     rmSync(TEST_CONFIG_FILE);
+  } catch {
+    // ignore
+  }
+  try {
+    rmSync(LEGACY_TEST_CONFIG_FILE);
   } catch {
     // ignore
   }
@@ -78,29 +90,31 @@ describe("getCustomModels", () => {
     expect(result).toEqual([]);
   });
 
-  test("returns only enabled models", async () => {
+  test("falls back to legacy config when new path is missing", async () => {
+    cleanupTestConfig();
     const config = JSON.stringify({
       version: "1.0",
       models: {
-        "provider/model-enabled": {
-          name: "Enabled Model",
+        "legacy/provider-model": {
+          name: "Legacy Model",
+          provider: "legacy",
+          tiers: ["SIMPLE"],
+          pricing: { input: 0.1, output: 0.2 },
+          limits: { contextWindow: 8192, maxOutput: 2048 },
           enabled: true,
-        },
-        "provider/model-disabled": {
-          name: "Disabled Model",
-          enabled: false,
         },
       },
     });
-    createTestConfig(config);
+    createLegacyTestConfig(config);
 
     const { getCustomModels, reloadModelRegistry } = await import("../src/model-registry.js");
     reloadModelRegistry();
     const models = getCustomModels();
 
     expect(models.length).toBe(1);
-    expect(models[0].id).toBe("provider/model-enabled");
+    expect(models[0].id).toBe("legacy/provider-model");
   });
+
 });
 
 describe("toOpenClawModel", () => {
@@ -119,6 +133,7 @@ describe("toOpenClawModel", () => {
           name: "My Model",
           provider: "test-provider",
           capabilities: { vision: true, reasoning: true, code: false, creative: false, agentic: false },
+          tiers: ["MEDIUM", "COMPLEX"],
           pricing: { input: 1.0, output: 2.0 },
           limits: { contextWindow: 100000, maxOutput: 8000 },
         },

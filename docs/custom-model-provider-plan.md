@@ -4,7 +4,7 @@
 
 **Goal:** Add JSON configuration file support for custom LLM providers and models, allowing users to extend ClawRouter with their own API keys and model configurations.
 
-**Architecture:** New `model-registry.ts` module handles loading/parsing custom model configs from `~/.openclaw/clawrouter/models.json`. Custom models merge with built-in models in `models.ts`. Router integration filters model selection by capability tiers. Hot reload via `fs.watch()`.
+**Architecture:** New `model-registry.ts` module handles loading/parsing custom model configs from `~/.coldrouter/models.json`. Custom models merge with built-in models in `models.ts`. Router integration filters model selection by capability tiers. Hot reload via `fs.watch()`.
 
 **Tech Stack:** TypeScript, Bun fs APIs, JSON Schema validation
 
@@ -62,7 +62,7 @@ export type ModelRegistryConfig = {
 /**
  * Model Registry - Custom Provider Configuration
  *
- * Loads custom model/provider configs from ~/.openclaw/clawrouter/models.json
+ * Loads custom model/provider configs from ~/.coldrouter/models.json
  * and merges with built-in models. Supports hot reload via file watcher.
  */
 
@@ -77,7 +77,7 @@ import type {
   Tier
 } from "./types.js";
 
-const MODELS_CONFIG_FILE = join(homedir(), ".openclaw", "clawrouter", "models.json");
+const MODELS_CONFIG_FILE = join(homedir(), ".coldrouter", "models.json");
 
 let cachedConfig: ModelRegistryConfig | null = null;
 let fileWatcher: ReturnType<typeof watchFile> | null = null;
@@ -261,7 +261,7 @@ import { writeFileSync, mkdirSync, rmSync } from "bun:fs";
 import { join } from "bun:path";
 import { homedir } from "bun:os";
 
-const TEST_CONFIG_DIR = join(homedir(), ".openclaw", "clawrouter");
+const TEST_CONFIG_DIR = join(homedir(), ".coldrouter");
 const TEST_CONFIG_FILE = join(TEST_CONFIG_DIR, "models.json");
 
 // Helper to create test config
@@ -624,7 +624,7 @@ Add to `docs/configuration.md`:
 ```markdown
 ## Custom Model Providers
 
-You can add your own LLM providers and models by creating a configuration file at `~/.openclaw/clawrouter/models.json`.
+You can add your own LLM providers and models by creating a configuration file at `~/.coldrouter/models.json`.
 
 ### Example Configuration
 

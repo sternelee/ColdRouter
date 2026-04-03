@@ -72,7 +72,7 @@ npx clawrouter
 
 ### Config File
 
-`~/.openclaw/clawrouter/config.json`:
+`~/.coldrouter/config.json`:
 
 ```json
 {
@@ -102,6 +102,87 @@ npx clawrouter
   }
 }
 ```
+
+## 自定义模型配置流程
+
+ColdRouter 支持从本地配置文件加载自定义 provider 和 model，并自动合并到内置模型池中参与路由。
+
+### 1) 创建配置文件
+
+在本机创建：`~/.coldrouter/models.json`
+
+```json
+{
+  "version": "1.0",
+  "providers": {
+    "my-provider": {
+      "name": "My Provider",
+      "baseUrl": "https://api.my-provider.com/v1",
+      "apiFormat": "openai-completions"
+    }
+  },
+  "models": {
+    "my-provider/my-model": {
+      "name": "My Model",
+      "provider": "my-provider",
+      "capabilities": {
+        "vision": false,
+        "reasoning": true,
+        "code": true,
+        "creative": false,
+        "agentic": false
+      },
+      "tiers": ["MEDIUM", "COMPLEX"],
+      "pricing": {
+        "input": 0.5,
+        "output": 1.5
+      },
+      "limits": {
+        "contextWindow": 128000,
+        "maxOutput": 16384
+      },
+      "useCases": ["coding", "analysis"],
+      "enabled": true
+    }
+  }
+}
+```
+
+### 2) 配置 provider API Key
+
+可选两种方式：
+
+- 在 `models.json` 的 provider 中直接写 `apiKey`
+- 或使用环境变量（推荐）
+
+> 建议优先使用环境变量/现有 key 管理方式，避免将密钥写入文件。
+
+### 3) 理解路由如何使用自定义模型
+
+- `tiers` 决定模型会参与哪些路由层级（`SIMPLE`/`MEDIUM`/`COMPLEX`/`REASONING`）。
+- `pricing` 会进入成本估算，影响“最便宜可用模型”的选择。
+- `capabilities`（如 `reasoning`/`code`/`agentic`）会参与能力匹配和路由信号。
+- `enabled: false` 可临时下线模型（无需删除配置）。
+
+### 4) 生效与使用
+
+- 模型注册由运行时自动加载，修改 `models.json` 后会热更新。
+- 继续使用自动路由：`/model coldrouter/auto`
+- 也可直接指定：`/model my-provider/my-model`
+
+### 5) 校验是否配置成功
+
+- 运行 `/keys` 查看 provider 可用状态（不显示完整密钥）
+- 运行 `/stats` 观察模型命中与成本变化
+- 访问代理健康检查：`GET /health`
+
+### 字段说明（简版）
+
+- `providers.<id>.apiFormat`: `openai-completions` / `anthropic-messages` / `google-generative-ai`
+- `models.<id>.pricing`: 每 1M token 成本（input/output）
+- `models.<id>.limits`: `contextWindow` 与 `maxOutput`
+- `models.<id>.tiers`: 路由层级白名单
+- `models.<id>.enabled`: 是否启用
 
 ## Routing Tiers
 
