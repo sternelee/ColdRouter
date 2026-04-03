@@ -1136,6 +1136,393 @@ export async function startProxy(options: ProxyOptions): Promise<ProxyHandle> {
           }
         }
 
+        // Claude Code API endpoint
+        if (pathname === "/v1/claude/models" && req.method === "GET") {
+          const accessibleProviders = getAccessibleProviders(options.apiKeys);
+          const models = [
+            { id: "claude-sonnet-4", name: "Claude Sonnet 4", provider: "anthropic" },
+            { id: "claude-opus-4", name: "Claude Opus 4", provider: "anthropic" },
+            { id: "claude-haiku-4", name: "Claude Haiku 4", provider: "anthropic" },
+            { id: "claude-sonnet-4-20250514", name: "Claude Sonnet 4 (latest)", provider: "anthropic" },
+            { id: "claude-opus-4-20250514", name: "Claude Opus 4 (latest)", provider: "anthropic" },
+            { id: "claude-haiku-4-20250414", name: "Claude Haiku 4 (latest)", provider: "anthropic" },
+          ].filter((m) => {
+            // Only show models if the provider is accessible
+            if (m.provider === "anthropic") {
+              return accessibleProviders.includes("anthropic") || hasOpenRouter(options.apiKeys);
+            }
+            return true;
+          });
+          return new Response(JSON.stringify({ object: "list", data: models }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+
+        // Claude Code completion endpoint
+        if (pathname === "/v1/claude/completions" && req.method === "POST") {
+          try {
+            const body = Buffer.from(await req.arrayBuffer());
+            const parsed = JSON.parse(body.toString()) as Record<string, unknown>;
+
+            const model = (parsed.model as string) || "claude-sonnet-4-20250514";
+            const messages = parsed.messages as Array<{ role: string; content: string }> || [];
+            const stream = parsed.stream === true;
+
+            // Resolve provider access
+            const access = resolveProviderAccess(options.apiKeys, `anthropic/${model}`);
+            if (!access) {
+              return new Response(
+                JSON.stringify({ error: { message: "No API key configured for Anthropic", type: "authentication_error" } }),
+                { status: 401, headers: { "Content-Type": "application/json" } },
+              );
+            }
+
+            // Build Anthropic API request
+            let systemMessage: string | undefined;
+            const nonSystemMessages: Array<{ role: string; content: string }> = [];
+
+            for (const msg of messages) {
+              if (msg.role === "system") {
+                systemMessage = msg.content;
+              } else {
+                nonSystemMessages.push({
+                  role: msg.role === "assistant" ? "assistant" : "user",
+                  content: msg.content,
+                });
+              }
+            }
+
+            const anthropicRequest = {
+              model,
+              messages: nonSystemMessages,
+              max_tokens: (parsed.max_tokens as number) || 4096,
+              temperature: parsed.temperature as number | undefined,
+              top_p: parsed.top_p as number | undefined,
+              ...(systemMessage && { system: systemMessage }),
+            };
+
+            const headers: Record<string, string> = {
+              "content-type": "application/json",
+              "x-api-key": access.apiKey,
+              "anthropic-version": "2023-06-01",
+              "user-agent": USER_AGENT,
+            };
+
+            const response = await fetch(`${access.baseUrl}/messages`, {
+              method: "POST",
+              headers,
+              body: JSON.stringify(anthropicRequest),
+              signal: AbortSignal.timeout(DEFAULT_REQUEST_TIMEOUT_MS),
+            });
+
+            if (!response.ok) {
+              const errorBody = await response.text();
+              return new Response(errorBody, {
+                status: response.status,
+                headers: { "Content-Type": "application/json" },
+              });
+            }
+
+            if (stream) {
+              // Convert Anthropic SSE to OpenAI-compatible format
+              const { readable, writable } = new TransformStream();
+              const writer = writable.getWriter();
+              const encoder = new TextEncoder();
+
+              (async () => {
+                try {
+                  if (response.body) {
+                    const reader = response.body.getReader();
+                    const chunks: Uint8Array[] = [];
+                    try {
+                      while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        chunks.push(value);
+                      }
+                    } finally {
+                      reader.releaseLock();
+                    }
+
+                    const text = Buffer.concat(chunks).toString();
+                    const parsedAnthropic = JSON.parse(text);
+
+                    const content = parsedAnthropic.content?.find((c: { type: string }) => c.type === "text")?.text || "";
+                    const usage = parsedAnthropic.usage || {};
+
+                    // Send role
+                    await writer.write(encoder.encode(
+                      `data: ${JSON.stringify({ id: parsedAnthropic.id, object: "chat.completion.chunk", created: Math.floor(Date.now() / 1000), model, choices: [{ index: 0, delta: { role: "assistant" }, finish_reason: null }] })}\n\n`
+                    ));
+
+                    // Send content
+                    if (content) {
+                      await writer.write(encoder.encode(
+                        `data: ${JSON.stringify({ id: parsedAnthropic.id, object: "chat.completion.chunk", created: Math.floor(Date.now() / 1000), model, choices: [{ index: 0, delta: { content }, finish_reason: null }] })}\n\n`
+                      ));
+                    }
+
+                    // Send stop
+                    await writer.write(encoder.encode(
+                      `data: ${JSON.stringify({ id: parsedAnthropic.id, object: "chat.completion.chunk", created: Math.floor(Date.now() / 1000), model, choices: [{ index: 0, delta: {}, finish_reason: "stop" }] })}\n\n`
+                    ));
+                    await writer.write(encoder.encode("data: [DONE]\n\n"));
+                  }
+                } catch (err) {
+                  proxyLogger.error?.(`Claude stream error: ${err instanceof Error ? err.message : String(err)}`);
+                } finally {
+                  await writer.close();
+                }
+              })();
+
+              return new Response(readable, {
+                status: 200,
+                headers: {
+                  "content-type": "text/event-stream",
+                  "cache-control": "no-cache",
+                },
+              });
+            } else {
+              // Non-streaming response - convert to OpenAI format
+              const anthropicResponse = await response.json();
+              const textContent = anthropicResponse.content?.find((c: { type: string }) => c.type === "text")?.text || "";
+
+              const openAIResponse = {
+                id: anthropicResponse.id,
+                object: "chat.completion",
+                created: Math.floor(Date.now() / 1000),
+                model: anthropicResponse.model,
+                choices: [
+                  {
+                    index: 0,
+                    message: {
+                      role: "assistant",
+                      content: textContent,
+                    },
+                    finish_reason: anthropicResponse.stop_reason === "end_turn" ? "stop" : anthropicResponse.stop_reason || "stop",
+                  },
+                ],
+                usage: {
+                  prompt_tokens: anthropicResponse.usage?.input_tokens || 0,
+                  completion_tokens: anthropicResponse.usage?.output_tokens || 0,
+                  total_tokens: (anthropicResponse.usage?.input_tokens || 0) + (anthropicResponse.usage?.output_tokens || 0),
+                },
+              };
+
+              return new Response(JSON.stringify(openAIResponse), {
+                status: 200,
+                headers: { "Content-Type": "application/json" },
+              });
+            }
+          } catch (err) {
+            return new Response(
+              JSON.stringify({ error: { message: err instanceof Error ? err.message : "Internal error", type: "server_error" } }),
+              { status: 500, headers: { "Content-Type": "application/json" } },
+            );
+          }
+        }
+
+        // Anthropic API proxy endpoint
+        if (pathname === "/v1/anthropic" && req.method === "POST") {
+          // Get API key - prefer direct Anthropic key, fallback to OpenRouter
+          let apiKey = options.apiKeys.providers.anthropic?.apiKey;
+          let baseUrl = options.apiKeys.providers.anthropic?.baseUrl || "https://api.anthropic.com/v1";
+          let viaOpenRouter = false;
+
+          if (!apiKey && options.apiKeys.providers.openrouter?.apiKey) {
+            // Fallback to OpenRouter
+            apiKey = options.apiKeys.providers.openrouter.apiKey;
+            baseUrl = "https://openrouter.ai/api/v1";
+            viaOpenRouter = true;
+          }
+
+          if (!apiKey) {
+            return new Response(
+              JSON.stringify({ error: { message: "No API key configured for Anthropic", type: "authentication_error" } }),
+              { status: 401, headers: { "Content-Type": "application/json" } },
+            );
+          }
+
+          try {
+            const body = Buffer.from(await req.arrayBuffer());
+            const parsed = JSON.parse(body.toString()) as Record<string, unknown>;
+
+            const model = (parsed.model as string) || "claude-sonnet-4-20250514";
+            const messages = parsed.messages as Array<{ role: string; content: string | unknown }> || [];
+            const stream = parsed.stream === true;
+
+            // Extract system message and build Anthropic format
+            let systemMessage: string | undefined;
+            const nonSystemMessages: Array<{ role: string; content: string }> = [];
+
+            for (const msg of messages) {
+              if (msg.role === "system") {
+                systemMessage = typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content);
+              } else {
+                nonSystemMessages.push({
+                  role: msg.role === "assistant" ? "assistant" : "user",
+                  content: typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content),
+                });
+              }
+            }
+
+            const requestBody = {
+              model,
+              messages: nonSystemMessages,
+              max_tokens: (parsed.max_tokens as number) || 4096,
+              temperature: parsed.temperature as number | undefined,
+              top_p: parsed.top_p as number | undefined,
+              ...(systemMessage && { system: systemMessage }),
+            };
+
+            const headers: Record<string, string> = {
+              "content-type": "application/json",
+              "user-agent": USER_AGENT,
+            };
+
+            if (viaOpenRouter) {
+              headers["authorization"] = `Bearer ${apiKey}`;
+              headers["x-title"] = "ColdRouter";
+            } else {
+              headers["x-api-key"] = apiKey;
+              headers["anthropic-version"] = "2023-06-01";
+            }
+
+            const response = await fetch(`${baseUrl}/messages`, {
+              method: "POST",
+              headers,
+              body: JSON.stringify(requestBody),
+              signal: AbortSignal.timeout(DEFAULT_REQUEST_TIMEOUT_MS),
+            });
+
+            if (!response.ok) {
+              const errorBody = await response.text();
+              return new Response(errorBody, {
+                status: response.status,
+                headers: { "Content-Type": "application/json" },
+              });
+            }
+
+            // Handle streaming response
+            if (stream) {
+              const { readable, writable } = new TransformStream();
+              const writer = writable.getWriter();
+              const encoder = new TextEncoder();
+
+              (async () => {
+                try {
+                  if (response.body) {
+                    const reader = response.body.getReader();
+                    let buffer = "";
+
+                    try {
+                      while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+
+                        buffer += new TextDecoder().decode(value);
+                        const lines = buffer.split("\n");
+                        buffer = lines.pop() || "";
+
+                        for (const line of lines) {
+                          const trimmed = line.trim();
+                          if (!trimmed || trimmed.startsWith(":")) continue;
+
+                          if (trimmed.startsWith("data: ")) {
+                            const data = trimmed.slice(6);
+                            if (data === "[DONE]") {
+                              await writer.write(encoder.encode("data: [DONE]\n\n"));
+                              break;
+                            }
+
+                            try {
+                              const event = JSON.parse(data);
+                              if (event.type === "message_delta") {
+                                const delta = event.delta?.text || "";
+                                const index = event.index ?? 0;
+                                await writer.write(encoder.encode(
+                                  `data: ${JSON.stringify({ id: event.message_id, object: "chat.completion.chunk", created: Math.floor(Date.now() / 1000), model, choices: [{ index, delta: { content: delta }, finish_reason: null }] })}\n\n`
+                                ));
+                              } else if (event.type === "content_block_delta") {
+                                const delta = event.delta?.text || "";
+                                const index = event.index ?? 0;
+                                await writer.write(encoder.encode(
+                                  `data: ${JSON.stringify({ id: event.message_id, object: "chat.completion.chunk", created: Math.floor(Date.now() / 1000), model, choices: [{ index, delta: { content: delta }, finish_reason: null }] })}\n\n`
+                                ));
+                              } else if (event.type === "message_stop") {
+                                const index = event.index ?? 0;
+                                await writer.write(encoder.encode(
+                                  `data: ${JSON.stringify({ id: event.message_id, object: "chat.completion.chunk", created: Math.floor(Date.now() / 1000), model, choices: [{ index, delta: {}, finish_reason: "stop" }] })}\n\n`
+                                ));
+                              }
+                            } catch {
+                              // Skip invalid JSON
+                            }
+                          }
+                        }
+                      }
+                    } finally {
+                      reader.releaseLock();
+                    }
+
+                    await writer.write(encoder.encode("data: [DONE]\n\n"));
+                  }
+                } catch (err) {
+                  proxyLogger.error?.(`Anthropic stream error: ${err instanceof Error ? err.message : String(err)}`);
+                } finally {
+                  await writer.close();
+                }
+              })();
+
+              return new Response(readable, {
+                status: 200,
+                headers: {
+                  "content-type": "text/event-stream",
+                  "cache-control": "no-cache",
+                },
+              });
+            } else {
+              // Non-streaming - return as-is
+              const responseBody = await response.text();
+              return new Response(responseBody, {
+                status: response.status,
+                headers: { "Content-Type": "application/json" },
+              });
+            }
+          } catch (err) {
+            return new Response(
+              JSON.stringify({ error: { message: err instanceof Error ? err.message : "Internal error", type: "server_error" } }),
+              { status: 500, headers: { "Content-Type": "application/json" } },
+            );
+          }
+        }
+
+        // ColdRouter AI endpoint for Claude Code
+        // Always uses smart routing - ignores the model parameter, uses auto-routing
+        if (pathname === "/v1/anthropic" && req.method === "POST") {
+          try {
+            const body = Buffer.from(await req.arrayBuffer());
+            const parsed = JSON.parse(body.toString()) as Record<string, unknown>;
+
+            // Force auto-routing - override the model to use smart routing
+            parsed.model = "coldrouter/auto";
+
+            const modifiedReq = new Request(req.url, {
+              method: req.method,
+              headers: req.headers,
+              body: Buffer.from(JSON.stringify(parsed)),
+            });
+
+            return handleChatCompletion(modifiedReq, options, routerOpts, deduplicator, sessionStore);
+          } catch (err) {
+            return new Response(
+              JSON.stringify({ error: { message: err instanceof Error ? err.message : "Invalid request", type: "invalid_request_error" } }),
+              { status: 400, headers: { "Content-Type": "application/json" } },
+            );
+          }
+        }
+
         if (pathname === "/v1/models" && req.method === "GET") {
           const accessibleProviders = getAccessibleProviders(options.apiKeys);
           const models = BLOCKRUN_MODELS.filter((m) => {
